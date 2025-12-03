@@ -1,11 +1,11 @@
 "use client";
 
-import { db } from "@/lib/db";
-import { type AppSchema } from "@/instant.schema";
-import { id, InstaQLEntity } from "@instantdb/react";
+import { id, init, InstaQLEntity } from "@instantdb/react";
+import schema from "@/instant.schema";
 
-type Todo = InstaQLEntity<AppSchema, "todos">;
+type Todo = InstaQLEntity<typeof schema, "todos">;
 
+const db = init({ appId: process.env.NEXT_PUBLIC_INSTANT_APP_ID!, schema });
 const room = db.room("todos");
 
 function App() {
@@ -46,7 +46,7 @@ function addTodo(text: string) {
       text,
       done: false,
       createdAt: Date.now(),
-    }),
+    })
   );
 }
 
@@ -67,9 +67,10 @@ function deleteCompleted(todos: Todo[]) {
 function toggleAll(todos: Todo[]) {
   const newVal = !todos.every((todo) => todo.done);
   db.transact(
-    todos.map((todo) => db.tx.todos[todo.id].update({ done: newVal })),
+    todos.map((todo) => db.tx.todos[todo.id].update({ done: newVal }))
   );
 }
+
 
 // Components
 // ----------
@@ -107,7 +108,7 @@ function TodoForm({ todos }: { todos: Todo[] }) {
         }}
       >
         <input
-          className="w-full h-full px-2 outline-none bg-transparent"
+          className="w-full h-full px-2 outline-hidden bg-transparent"
           autoFocus
           placeholder="What needs to be done?"
           type="text"
