@@ -2,6 +2,8 @@
 
 import { id, init, InstaQLEntity } from "@instantdb/react";
 import schema from "@/instant.schema";
+import { useUser, SignIn, SignUp, UserButton } from "@stackframe/stack";
+import { useState } from "react";
 
 type Todo = InstaQLEntity<typeof schema, "todos">;
 
@@ -21,7 +23,10 @@ function App() {
   }
   const { todos } = data;
   return (
-    <div className="font-mono min-h-screen flex justify-center items-center flex-col space-y-4">
+    <div className="font-mono min-h-screen flex justify-center items-center flex-col space-y-4 relative">
+      <div className="absolute top-4 right-4">
+        <AuthButtons />
+      </div>
       <div className="text-xs text-gray-500">
         Number of users online: {numUsers}
       </div>
@@ -74,6 +79,75 @@ function toggleAll(todos: Todo[]) {
 
 // Components
 // ----------
+function AuthButtons() {
+  const user = useUser();
+  const [showSignIn, setShowSignIn] = useState(false);
+  const [showSignUp, setShowSignUp] = useState(false);
+
+  if (user) {
+    return (
+      <UserButton
+        showUserInfo={true}
+      />
+    );
+  }
+
+  if (showSignIn) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 relative">
+          <button
+            onClick={() => setShowSignIn(false)}
+            className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+          >
+            ✕
+          </button>
+          <SignIn
+            fullPage={false}
+            automaticRedirect={true}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (showSignUp) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 relative">
+          <button
+            onClick={() => setShowSignUp(false)}
+            className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+          >
+            ✕
+          </button>
+          <SignUp
+            fullPage={false}
+            automaticRedirect={true}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2">
+      <button
+        onClick={() => setShowSignIn(true)}
+        className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 transition-colors text-sm"
+      >
+        Sign In
+      </button>
+      <button
+        onClick={() => setShowSignUp(true)}
+        className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors text-sm"
+      >
+        Sign Up
+      </button>
+    </div>
+  );
+}
+
 function ChevronDownIcon() {
   return (
     <svg viewBox="0 0 20 20">
