@@ -1,7 +1,26 @@
-import type { NextConfig } from 'next';
+import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  reactStrictMode: false, // Disable to prevent double OAuth callbacks in dev
+  experimental: {
+    // Disable PPR to ensure middleware runs in Node.js runtime (not Edge)
+    // This allows Prisma to work in middleware
+    ppr: false,
+  },
+  images: {
+    remotePatterns: [
+      {
+        // Allows images from Pexels
+        protocol: "https",
+        hostname: "images.pexels.com",
+      },
+      {
+        // Allows videos from Pexels
+        protocol: "https",
+        hostname: "static-videos.pexels.com",
+      },
+    ],
+  },
 };
 
 export default nextConfig;
