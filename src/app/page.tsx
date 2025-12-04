@@ -1,244 +1,123 @@
 "use client";
 
-import { id, init, InstaQLEntity } from "@instantdb/react";
-import schema from "@/instant.schema";
-import { useUser, SignIn, SignUp, UserButton } from "@stackframe/stack";
-import { useState } from "react";
+import { useUser, UserButton } from "@stackframe/stack";
+import Link from "next/link";
+import { db } from "@/lib/db";
 
-type Todo = InstaQLEntity<typeof schema, "todos">;
-
-const db = init({ appId: process.env.NEXT_PUBLIC_INSTANT_APP_ID!, schema });
-const room = db.room("todos");
-
-function App() {
-  // Read Data
-  const { isLoading, error, data } = db.useQuery({ todos: {} });
-  const { peers } = db.rooms.usePresence(room);
-  const numUsers = 1 + Object.keys(peers).length;
-  if (isLoading) {
-    return;
-  }
-  if (error) {
-    return <div className="text-red-500 p-4">Error: {error.message}</div>;
-  }
-  const { todos } = data;
-  return (
-    <div className="font-mono min-h-screen flex justify-center items-center flex-col space-y-4 relative">
-      <div className="absolute top-4 right-4">
-        <AuthButtons />
-      </div>
-      <div className="text-xs text-gray-500">
-        Number of users online: {numUsers}
-      </div>
-      <h2 className="tracking-wide text-5xl text-gray-300">todos</h2>
-      <div className="border border-gray-300 max-w-xs w-full">
-        <TodoForm todos={todos} />
-        <TodoList todos={todos} />
-        <ActionBar todos={todos} />
-      </div>
-      <div className="text-xs text-center">
-        Open another tab to see todos update in realtime!
-      </div>
-    </div>
-  );
-}
-
-// Write Data
-// ---------
-function addTodo(text: string) {
-  db.transact(
-    db.tx.todos[id()].update({
-      text,
-      done: false,
-      createdAt: Date.now(),
-    })
-  );
-}
-
-function deleteTodo(todo: Todo) {
-  db.transact(db.tx.todos[todo.id].delete());
-}
-
-function toggleDone(todo: Todo) {
-  db.transact(db.tx.todos[todo.id].update({ done: !todo.done }));
-}
-
-function deleteCompleted(todos: Todo[]) {
-  const completed = todos.filter((todo) => todo.done);
-  const txs = completed.map((todo) => db.tx.todos[todo.id].delete());
-  db.transact(txs);
-}
-
-function toggleAll(todos: Todo[]) {
-  const newVal = !todos.every((todo) => todo.done);
-  db.transact(
-    todos.map((todo) => db.tx.todos[todo.id].update({ done: newVal }))
-  );
-}
-
-
-// Components
-// ----------
-function AuthButtons() {
+export default function Home() {
   const user = useUser();
-  const [showSignIn, setShowSignIn] = useState(false);
-  const [showSignUp, setShowSignUp] = useState(false);
-
-  if (user) {
-    return (
-      <UserButton
-        showUserInfo={true}
-      />
-    );
-  }
-
-  if (showSignIn) {
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 relative">
-          <button
-            onClick={() => setShowSignIn(false)}
-            className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-          >
-            ✕
-          </button>
-          <SignIn
-            fullPage={false}
-            automaticRedirect={true}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (showSignUp) {
-    return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 relative">
-          <button
-            onClick={() => setShowSignUp(false)}
-            className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-          >
-            ✕
-          </button>
-          <SignUp
-            fullPage={false}
-            automaticRedirect={true}
-          />
-        </div>
-      </div>
-    );
-  }
+  const { isLoading, error } = db.useQuery({});
 
   return (
-    <div className="flex gap-2">
-      <button
-        onClick={() => setShowSignIn(true)}
-        className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 transition-colors text-sm"
-      >
-        Sign In
-      </button>
-      <button
-        onClick={() => setShowSignUp(true)}
-        className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition-colors text-sm"
-      >
-        Sign Up
-      </button>
-    </div>
-  );
-}
-
-function ChevronDownIcon() {
-  return (
-    <svg viewBox="0 0 20 20">
-      <path
-        d="M5 8 L10 13 L15 8"
-        stroke="currentColor"
-        fill="none"
-        strokeWidth="2"
-      />
-    </svg>
-  );
-}
-
-function TodoForm({ todos }: { todos: Todo[] }) {
-  return (
-    <div className="flex items-center h-10 border-b border-gray-300">
-      <button
-        className="h-full px-2 border-r border-gray-300 flex items-center justify-center"
-        onClick={() => toggleAll(todos)}
-      >
-        <div className="w-5 h-5">
-          <ChevronDownIcon />
-        </div>
-      </button>
-      <form
-        className="flex-1 h-full"
-        onSubmit={(e) => {
-          e.preventDefault();
-          const input = e.currentTarget.input as HTMLInputElement;
-          addTodo(input.value);
-          input.value = "";
-        }}
-      >
-        <input
-          className="w-full h-full px-2 outline-hidden bg-transparent"
-          autoFocus
-          placeholder="What needs to be done?"
-          type="text"
-          name="input"
-        />
-      </form>
-    </div>
-  );
-}
-
-function TodoList({ todos }: { todos: Todo[] }) {
-  return (
-    <div className="divide-y divide-gray-300">
-      {todos.map((todo) => (
-        <div key={todo.id} className="flex items-center h-10">
-          <div className="h-full px-2 flex items-center justify-center">
-            <div className="w-5 h-5 flex items-center justify-center">
-              <input
-                type="checkbox"
-                className="cursor-pointer"
-                checked={todo.done}
-                onChange={() => toggleDone(todo)}
-              />
-            </div>
-          </div>
-          <div className="flex-1 px-2 overflow-hidden flex items-center">
-            {todo.done ? (
-              <span className="line-through">{todo.text}</span>
+    <div className="min-h-screen flex flex-col">
+      {/* Header */}
+      <header className="border-b border-border">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+          <Link href="/" className="font-semibold text-xl">
+            Your App
+          </Link>
+          <nav className="flex items-center gap-4">
+            {user ? (
+              <>
+                <Link
+                  href="/dashboard"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Dashboard
+                </Link>
+                <UserButton />
+              </>
             ) : (
-              <span>{todo.text}</span>
+              <>
+                <Link
+                  href="/handler/sign-in"
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/handler/sign-up"
+                  className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
+          </nav>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <main className="flex-1 flex items-center justify-center">
+        <div className="container mx-auto px-4 py-16 text-center">
+          <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight mb-6">
+            Build Your Next
+            <br />
+            <span className="text-muted-foreground">Great Idea</span>
+          </h1>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
+            A minimal SaaS template with authentication and real-time database
+            ready to go. Start building your application today.
+          </p>
+          <div className="flex items-center justify-center gap-4">
+            {user ? (
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+              >
+                Go to Dashboard
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/handler/sign-up"
+                  className="inline-flex items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                >
+                  Get Started
+                </Link>
+                <Link
+                  href="/handler/sign-in"
+                  className="inline-flex items-center justify-center rounded-md border border-input bg-background px-6 py-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  Sign In
+                </Link>
+              </>
             )}
           </div>
-          <button
-            className="h-full px-2 flex items-center justify-center text-gray-300 hover:text-gray-500"
-            onClick={() => deleteTodo(todo)}
-          >
-            X
-          </button>
+
+          {/* Status indicators */}
+          <div className="mt-16 flex items-center justify-center gap-8 text-sm text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-2 h-2 rounded-full ${user ? "bg-green-500" : "bg-muted-foreground"
+                  }`}
+              />
+              <span>Auth: {user ? "Connected" : "Not signed in"}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div
+                className={`w-2 h-2 rounded-full ${isLoading
+                    ? "bg-yellow-500"
+                    : error
+                      ? "bg-red-500"
+                      : "bg-green-500"
+                  }`}
+              />
+              <span>
+                Database:{" "}
+                {isLoading ? "Connecting..." : error ? "Error" : "Connected"}
+              </span>
+            </div>
+          </div>
         </div>
-      ))}
+      </main>
+
+      {/* Footer */}
+      <footer className="border-t border-border py-6">
+        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+          Built with Stack Auth & InstantDB
+        </div>
+      </footer>
     </div>
   );
 }
-
-function ActionBar({ todos }: { todos: Todo[] }) {
-  return (
-    <div className="flex justify-between items-center h-10 px-2 text-xs border-t border-gray-300">
-      <div>Remaining todos: {todos.filter((todo) => !todo.done).length}</div>
-      <button
-        className=" text-gray-300 hover:text-gray-500"
-        onClick={() => deleteCompleted(todos)}
-      >
-        Delete Completed
-      </button>
-    </div>
-  );
-}
-
-export default App;

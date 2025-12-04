@@ -4,16 +4,30 @@ import { i } from "@instantdb/react";
 
 const _schema = i.schema({
   entities: {
-    todos: i.entity({
-      text: i.string(),
-      done: i.boolean(),
-      createdAt: i.number(),
-    }),
+    // Add your entities here
+    // Example:
+    // posts: i.entity({
+    //   title: i.string(),
+    //   content: i.string(),
+    //   createdAt: i.number().indexed(),
+    // }),
+  },
+  links: {
+    // Add your links here
+    // Example:
+    // authorPosts: {
+    //   forward: { on: "posts", has: "one", label: "author" },
+    //   reverse: { on: "$users", has: "many", label: "posts" },
+    // },
   },
   rooms: {
-    todos: {
-      presence: i.entity({}),
-    },
+    // Add your rooms for real-time presence here
+    // Example:
+    // chat: {
+    //   presence: i.entity({
+    //     name: i.string(),
+    //   }),
+    // },
   },
 });
 
