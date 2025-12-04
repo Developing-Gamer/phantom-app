@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   reactStrictMode: false, // Disable to prevent double OAuth callbacks in dev
   experimental: {
     // Disable PPR to ensure middleware runs in Node.js runtime (not Edge)
