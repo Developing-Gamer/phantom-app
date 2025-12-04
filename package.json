@@ -12,6 +12,7 @@
   "dependencies": {
     "@instantdb/admin": "latest",
     "@instantdb/react": "latest",
+    "@stackframe/stack": "^2.8.54",
     "instant-cli": "^0.22.76",
     "next": "16.0.7",
     "react": "19.2.1",
