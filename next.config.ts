@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
     // This allows Prisma to work in middleware
     ppr: false,
   },
+  allowedDevOrigins: [
+    "http://localhost:3000",
+    "https://*.tryphantom.io",
+    "http://www.tryphantom.io",
+    "http://tryphantom.io",
+  ],
   images: {
     remotePatterns: [
       {
