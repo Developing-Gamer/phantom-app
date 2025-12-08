@@ -29,6 +29,28 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        {/* Don't remove this script. It is used to notify the parent frame of navigation changes. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                if (window.parent === window) return;
+                var lastPath = location.pathname + location.search;
+                function notify() {
+                  var path = location.pathname + location.search;
+                  if (path !== lastPath) lastPath = path;
+                  window.parent.postMessage({ type: "navigation", path: path }, "*");
+                }
+                notify();
+                window.addEventListener("popstate", notify);
+                var push = history.pushState;
+                history.pushState = function() { push.apply(this, arguments); setTimeout(notify, 0); };
+                var replace = history.replaceState;
+                history.replaceState = function() { replace.apply(this, arguments); setTimeout(notify, 0); };
+              })();
+            `,
+          }}
+        />
         <StackProvider app={stackClientApp}>
           <StackTheme>{children}</StackTheme>
         </StackProvider>
