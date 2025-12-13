@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "NEXT_IGNORE_ESLINT=1 next build --turbopack",
     "lint": "next lint",
     "db:push": "instant-cli push",
     "db:pull": "instant-cli pull"
@@ -50,7 +50,7 @@
     "input-otp": "^1.4.2",
     "instant-cli": "^0.22.76",
     "lucide-react": "^0.555.0",
-    "next": "16.0.7",
+    "next": "16.0.10",
     "next-themes": "^0.4.6",
     "react": "19.2.1",
     "react-day-picker": "^9.11.3",

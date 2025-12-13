@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 
 export default function DashboardPage() {
   const user = useUser();
-  const { isLoading, error, data } = db.useQuery({});
+  const { isLoading, error } = db.useQuery({});
 
   return (
     <div className="min-h-screen flex flex-col">
