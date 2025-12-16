@@ -6,6 +6,7 @@ export default function Home() {
   const user = useUser();
 
   return (
-    <div></div>
+    <div className="flex items-center justify-center min-h-screen">
+    </div>
   );
 }
