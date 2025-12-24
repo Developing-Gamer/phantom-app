@@ -2,8 +2,13 @@
 
 import { i } from "@instantdb/react";
 
-const _schema = i.schema({
+const schema = i.schema({
   entities: {
+    // InstantDB's built-in user entity - required for custom authentication
+    // When using Stack Auth with InstantDB, user emails/IDs are stored here
+    $users: i.entity({
+      email: i.any().unique().indexed(),
+    }),
     // Add your entities here
     // Example:
     // posts: i.entity({
@@ -32,9 +37,5 @@ const _schema = i.schema({
 });
 
 // This helps Typescript display nicer intellisense
-type _AppSchema = typeof _schema;
-interface AppSchema extends _AppSchema {}
-const schema: AppSchema = _schema;
-
-export type { AppSchema };
+export type AppSchema = typeof schema;
 export default schema;

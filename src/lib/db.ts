@@ -1,7 +1,7 @@
 import { init } from "@instantdb/react";
-import schema from "@/instant.schema";
+import schema, { type AppSchema } from "@/instant.schema";
 
-export const db = init({
+export const db = init<AppSchema>({
   appId: process.env.NEXT_PUBLIC_INSTANT_APP_ID!,
   schema,
   devtool: false,
