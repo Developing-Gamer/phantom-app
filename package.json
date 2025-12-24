@@ -7,7 +7,9 @@
     "build": "NEXT_IGNORE_ESLINT=1 next build --turbopack",
     "lint": "next lint",
     "db:push": "instant-cli push",
-    "db:pull": "instant-cli pull"
+    "db:pull": "instant-cli pull",
+    "perms:push": "instant-cli push perms",
+    "perms:pull": "instant-cli pull perms"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
