@@ -4,9 +4,11 @@ import { db } from "@/lib/db";
 
 /**
  * Hook to automatically sync Stack Auth users with InstantDB.
- * When a user signs in with Stack Auth, this hook fetches an InstantDB
- * token from our backend and signs them into InstantDB.
- * 
+ * - When a user signs in with Stack Auth, this hook fetches an InstantDB
+ *   token from our backend and signs them into InstantDB.
+ * - When a user signs out of Stack Auth (including via /handler/sign-out),
+ *   this hook signs them out of InstantDB.
+ *
  * Referenced from InstantDB docs:
  * https://www.instantdb.com/docs/backend
  */
@@ -19,17 +21,29 @@ export function useInstantDBAuth() {
   useEffect(() => {
     let isMounted = true;
 
-    const authenticateWithInstantDB = async () => {
-      // Only proceed if we have a Stack Auth user
+    const syncAuth = async () => {
+      // Case 1: Stack Auth signed out but InstantDB still signed in
+      // This handles /handler/sign-out redirects and any other sign-out method
+      if (!stackUser && instantAuth.user) {
+        try {
+          db.auth.signOut();
+        } catch (err) {
+          console.error("InstantDB sign out error:", err);
+        }
+        return;
+      }
+
+      // Case 2: No Stack user and no InstantDB user - nothing to do
       if (!stackUser) {
         return;
       }
 
-      // Check if already authenticated with InstantDB
+      // Case 3: Already authenticated with InstantDB
       if (instantAuth.user) {
         return;
       }
 
+      // Case 4: Stack Auth signed in but InstantDB not - sign in to InstantDB
       setIsAuthenticating(true);
       setError(null);
 
@@ -64,7 +78,7 @@ export function useInstantDBAuth() {
       }
     };
 
-    authenticateWithInstantDB();
+    syncAuth();
 
     return () => {
       isMounted = false;
