@@ -28,11 +28,11 @@ export async function POST() {
     }
 
     // Generate an InstantDB token for this user
-    // CRITICAL: createToken expects a string (email format), NOT an object
-    // Use the Stack Auth user's email (or a formatted identifier) for InstantDB
-    const userEmail = user.primaryEmail || `${user.id}@stack-user.local`;
-
-    const token = await adminDb.auth.createToken(userEmail);
+    // CRITICAL: createToken expects an object with an 'email' property
+    // InstantDB's authentication system is email-based
+    const token = await adminDb.auth.createToken({
+      email: user.primaryEmail!,
+    });
 
     return NextResponse.json({ token });
   } catch (error) {
