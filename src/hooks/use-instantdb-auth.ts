@@ -37,12 +37,15 @@ export function useInstantDBAuth() {
           lastStackUserIdRef.current = null;
         } catch (err) {
           console.error("InstantDB sign out error:", err);
+        } finally {
+          setIsAuthenticating(false);
         }
         return;
       }
 
       // Case 2: No Stack user and no InstantDB user - nothing to do
       if (!stackUser) {
+        setIsAuthenticating(false);
         return;
       }
 
@@ -66,6 +69,7 @@ export function useInstantDBAuth() {
         instantAuth.user &&
         lastStackUserIdRef.current === currentStackUserId
       ) {
+        setIsAuthenticating(false);
         return;
       }
 
@@ -112,7 +116,7 @@ export function useInstantDBAuth() {
     return () => {
       isMounted = false;
     };
-  }, [stackUser?.id, instantAuth.user]);
+  }, [stackUser?.id]);
 
   return { isAuthenticating, error };
 }

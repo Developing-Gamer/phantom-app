@@ -1,25 +1,53 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useUser, UserButton } from "@stackframe/stack";
+import { useInstantDBAuth } from "@/hooks/use-instantdb-auth";
+import { db } from "@/lib/db";
 
 function AuthenticatedContent() {
-  const user = useUser();
+  const stackUser = useUser();
+  const { isAuthenticating: isInstantAuthenticating } = useInstantDBAuth();
+  const instantAuth = db.useAuth();
+  const [isForceIdle, setIsForceIdle] = useState(false);
 
-  if (!user) {
+  // Safety Fallback: If authentication or initial data fetching takes too long,
+  // force the UI into an idle state to prevent infinite loading screens.
+  useEffect(() => {
+    if (!stackUser) return;
+    
+    const timeout = setTimeout(() => {
+      setIsForceIdle(true);
+    }, 10000); // 10-second "force-idle" timeout
+
+    return () => clearTimeout(timeout);
+  }, [stackUser]);
+
+  // Wait for both Stack Auth and InstantDB Auth to be ready
+  const isLoading = 
+    !isForceIdle && 
+    (isInstantAuthenticating || (stackUser && !instantAuth.user));
+
+  if (isLoading) {
+    return <LoadingState message="Syncing your account..." />;
+  }
+
+  if (!stackUser) {
     return (
       <div className="flex flex-col items-center justify-center gap-4">
-        <p className="text-muted-foreground">Welcome! Please sign in to continue.</p>
-        <div className="flex gap-2">
+        <p className="text-muted-foreground text-center max-w-md">
+          Welcome! Please sign in to access your dashboard and sync with InstantDB.
+        </p>
+        <div className="flex gap-4">
           <a
             href="/handler/sign-in"
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+            className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-all font-medium"
           >
             Sign In
           </a>
           <a
             href="/handler/sign-up"
-            className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/90 transition-colors"
+            className="px-6 py-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-md transition-all font-medium"
           >
             Sign Up
           </a>
@@ -29,15 +57,46 @@ function AuthenticatedContent() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center gap-4">
-      <p className="text-lg">
-        Welcome, <span className="font-semibold">{user.displayName || user.primaryEmail}</span>!
-      </p>
-      <UserButton />
-      {/* Alternative sign out button using user.signOut() method */}
+    <div className="flex flex-col items-center justify-center gap-6 p-8 max-w-2xl mx-auto text-center">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">Welcome Back</h1>
+        <p className="text-muted-foreground">
+          Authenticated as <span className="text-foreground font-semibold">{stackUser.displayName || stackUser.primaryEmail}</span>
+        </p>
+      </div>
+      
+      <div className="flex items-center gap-4 p-4 border rounded-lg bg-card text-card-foreground shadow-sm">
+        <UserButton />
+        <div className="text-left">
+          <p className="text-sm font-medium leading-none">{stackUser.displayName || "No Name Set"}</p>
+          <p className="text-xs text-muted-foreground">{stackUser.primaryEmail}</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+        <div className="p-4 border rounded-lg text-left space-y-2">
+          <h3 className="font-semibold">Stack Auth</h3>
+          <p className="text-sm text-muted-foreground">User ID: {stackUser.id.substring(0, 8)}...</p>
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full bg-green-500" />
+            <span className="text-xs font-medium uppercase tracking-wider">Connected</span>
+          </div>
+        </div>
+        <div className="p-4 border rounded-lg text-left space-y-2">
+          <h3 className="font-semibold">InstantDB</h3>
+          <p className="text-sm text-muted-foreground">User ID: {instantAuth.user?.id.substring(0, 8) || "..."}</p>
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${instantAuth.user ? "bg-green-500" : "bg-yellow-500"}`} />
+            <span className="text-xs font-medium uppercase tracking-wider">
+              {instantAuth.user ? "Synced" : "Connecting..."}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <button
-        onClick={() => user.signOut()}
-        className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        onClick={() => stackUser.signOut()}
+        className="text-sm text-muted-foreground hover:text-destructive transition-colors underline underline-offset-4"
       >
         Sign Out
       </button>
@@ -45,9 +104,12 @@ function AuthenticatedContent() {
   );
 }
 
-function LoadingState() {
+function LoadingState({ message = "Loading..." }: { message?: string }) {
   return (
-    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <div className="flex flex-col items-center justify-center gap-4">
+      <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      <p className="text-sm font-medium animate-pulse text-muted-foreground">{message}</p>
+    </div>
   );
 }
 

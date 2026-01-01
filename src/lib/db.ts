@@ -6,3 +6,19 @@ export const db = init<AppSchema>({
   schema,
   devtool: false,
 });
+
+/**
+ * BEST PRACTICES FOR INSTANTDB TRANSACTIONS
+ * -----------------------------------------
+ * When creating entities that are linked to others, use atomic transactions:
+ * 
+ * const messageId = id(); // from @instantdb/react
+ * db.tx.messages[messageId]
+ *   .update({ content: "Hello", createdAt: Date.now() })
+ *   .link({ chat: chatId }); // Link to the parent entity
+ * 
+ * db.tx.chats[chatId].update({ lastMessageAt: Date.now() });
+ * 
+ * Rule: If your schema defines a link, ALWAYS use .link() or .unlink()
+ * to make data traversable in nested queries.
+ */

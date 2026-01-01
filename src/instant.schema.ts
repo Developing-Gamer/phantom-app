@@ -11,18 +11,23 @@ const schema = i.schema({
     }),
     // Add your entities here
     // Example:
-    // posts: i.entity({
-    //   title: i.string(),
+    // messages: i.entity({
     //   content: i.string(),
     //   createdAt: i.number().indexed(),
+    // }),
+    // chats: i.entity({
+    //   name: i.string(),
+    //   lastMessageAt: i.number().indexed(),
     // }),
   },
   links: {
     // Add your links here
+    // InstantDB relies on a graph-based linking system.
+    // Always use db.tx.entity[id].link({ label: otherId }) in transactions.
     // Example:
-    // authorPosts: {
-    //   forward: { on: "posts", has: "one", label: "author" },
-    //   reverse: { on: "$users", has: "many", label: "posts" },
+    // chatMessages: {
+    //   forward: { on: "chats", has: "many", label: "messages" },
+    //   reverse: { on: "messages", has: "one", label: "chat" },
     // },
   },
   rooms: {
