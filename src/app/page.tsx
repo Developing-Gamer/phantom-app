@@ -2,31 +2,26 @@
 
 import { Suspense, useState, useEffect } from "react";
 import { useUser, UserButton } from "@stackframe/stack";
-import { useInstantDBAuth } from "@/hooks/use-instantdb-auth";
 import { db } from "@/lib/db";
 
 function AuthenticatedContent() {
   const stackUser = useUser();
-  const { isAuthenticating: isInstantAuthenticating } = useInstantDBAuth();
   const instantAuth = db.useAuth();
   const [isForceIdle, setIsForceIdle] = useState(false);
 
-  // Safety Fallback: If authentication or initial data fetching takes too long,
-  // force the UI into an idle state to prevent infinite loading screens.
   useEffect(() => {
     if (!stackUser) return;
-    
+
     const timeout = setTimeout(() => {
       setIsForceIdle(true);
-    }, 10000); // 10-second "force-idle" timeout
+    }, 10000);
 
     return () => clearTimeout(timeout);
   }, [stackUser]);
 
-  // Wait for both Stack Auth and InstantDB Auth to be ready
-  const isLoading = 
-    !isForceIdle && 
-    (isInstantAuthenticating || (stackUser && !instantAuth.user));
+  const isLoading =
+    !isForceIdle &&
+    (stackUser && !instantAuth.user);
 
   if (isLoading) {
     return <LoadingState message="Syncing your account..." />;
@@ -64,7 +59,7 @@ function AuthenticatedContent() {
           Authenticated as <span className="text-foreground font-semibold">{stackUser.displayName || stackUser.primaryEmail}</span>
         </p>
       </div>
-      
+
       <div className="flex items-center gap-4 p-4 border rounded-lg bg-card text-card-foreground shadow-sm">
         <UserButton />
         <div className="text-left">

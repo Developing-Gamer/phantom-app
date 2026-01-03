@@ -4,15 +4,19 @@ import { db } from "@/lib/db";
 
 /**
  * Hook to automatically sync Stack Auth users with InstantDB.
- * - When a user signs in with Stack Auth, this hook fetches an InstantDB
- *   token from our backend and signs them into InstantDB.
- * - When a user signs out of Stack Auth (including via /handler/sign-out),
- *   this hook signs them out of InstantDB.
- * - Handles account switching by detecting when a different Stack Auth user
- *   signs in and properly clearing the old InstantDB session.
  *
- * Referenced from InstantDB docs:
- * https://www.instantdb.com/docs/backend
+ * This hook ensures InstantDB authentication state always follows Stack Auth:
+ * - Sign in/Sign up: When a user authenticates with Stack Auth (via password, OAuth,
+ *   magic link, or any other method), this hook fetches an InstantDB token from the
+ *   backend and signs them into InstantDB.
+ * - Sign out: When a user signs out of Stack Auth (via user.signOut(), /handler/sign-out,
+ *   or any other method), this hook automatically signs them out of InstantDB.
+ * - Account switching: When switching between different Stack Auth accounts, this hook
+ *   properly clears the old InstantDB session before authenticating the new account,
+ *   preventing data leakage.
+ *
+ * USAGE: Call this hook once at the root of your app (e.g., in layout.tsx or a global
+ * provider component) to ensure it runs on all pages and handles all auth state changes.
  */
 export function useInstantDBAuth() {
   const stackUser = useUser();
@@ -20,8 +24,8 @@ export function useInstantDBAuth() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Track which Stack Auth user is currently authenticated
   const lastStackUserIdRef = useRef<string | null>(null);
+  const isSigningOutRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -30,75 +34,104 @@ export function useInstantDBAuth() {
       const currentStackUserId = stackUser?.id || null;
 
       // Case 1: Stack Auth signed out but InstantDB still signed in
-      // This handles /handler/sign-out redirects and any other sign-out method
       if (!stackUser && instantAuth.user) {
+        if (isSigningOutRef.current) return;
+
+        isSigningOutRef.current = true;
         try {
           await db.auth.signOut();
           lastStackUserIdRef.current = null;
         } catch (err) {
           console.error("InstantDB sign out error:", err);
+          if (isMounted) {
+            setError(err instanceof Error ? err.message : "Sign out failed");
+          }
         } finally {
-          setIsAuthenticating(false);
+          isSigningOutRef.current = false;
+          if (isMounted) {
+            setIsAuthenticating(false);
+          }
         }
         return;
       }
 
       // Case 2: No Stack user and no InstantDB user - nothing to do
       if (!stackUser) {
-        setIsAuthenticating(false);
+        if (isMounted) {
+          setIsAuthenticating(false);
+          setError(null);
+        }
         return;
       }
 
-      // Case 3: Account switch detected - sign out old InstantDB session
-      // This prevents data leakage between different user accounts
+      // Case 3: Account switch detected - sign out old InstantDB session first to prevent data leakage
       if (
         instantAuth.user &&
         lastStackUserIdRef.current &&
         lastStackUserIdRef.current !== currentStackUserId
       ) {
+        if (isSigningOutRef.current) return;
+
+        isSigningOutRef.current = true;
         try {
+          console.log(
+            "Account switch detected, signing out old InstantDB session"
+          );
           await db.auth.signOut();
+          await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (err) {
           console.error("InstantDB sign out error during account switch:", err);
+        } finally {
+          isSigningOutRef.current = false;
         }
-        // Continue to Case 5 to authenticate new user
       }
 
       // Case 4: Already authenticated with correct user
       if (
         instantAuth.user &&
+        instantAuth.user.id === currentStackUserId &&
         lastStackUserIdRef.current === currentStackUserId
       ) {
-        setIsAuthenticating(false);
+        if (isMounted) {
+          setIsAuthenticating(false);
+          setError(null);
+        }
         return;
       }
 
-      // Case 5: Stack Auth signed in but InstantDB not - sign in to InstantDB
-      setIsAuthenticating(true);
-      setError(null);
+      // Case 5: Stack Auth signed in but InstantDB not authenticated (or wrong user)
+      if (isMounted) {
+        setIsAuthenticating(true);
+        setError(null);
+      }
 
       try {
-        // Request an InstantDB token from our backend
         const response = await fetch("/api/auth/instantdb", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
+          credentials: "include",
         });
 
         if (!response.ok) {
-          throw new Error(`Failed to authenticate: ${response.statusText}`);
+          const errorText = await response.text();
+          throw new Error(
+            `Failed to authenticate: ${response.statusText}${errorText ? ` - ${errorText}` : ""}`
+          );
         }
 
         const { token } = await response.json();
 
         if (!isMounted) return;
 
-        // Sign in to InstantDB with the token
         await db.auth.signInWithToken(token);
 
-        // Track the authenticated user
         lastStackUserIdRef.current = currentStackUserId;
+
+        if (isMounted) {
+          setError(null);
+        }
       } catch (err) {
         if (!isMounted) return;
 
@@ -116,7 +149,7 @@ export function useInstantDBAuth() {
     return () => {
       isMounted = false;
     };
-  }, [stackUser?.id]);
+  }, [stackUser?.id, instantAuth.user?.id]);
 
   return { isAuthenticating, error };
 }
