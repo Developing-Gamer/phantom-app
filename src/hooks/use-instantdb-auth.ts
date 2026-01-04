@@ -3,6 +3,24 @@ import { useUser } from "@stackframe/stack";
 import { db } from "@/lib/db";
 
 /**
+ * Helper function to extract Stack Auth access token from cookies.
+ * This is necessary for iframe contexts where third-party cookies may be blocked.
+ */
+function getStackAccessToken(): string | null {
+  if (typeof document === "undefined") return null;
+  
+  const cookies = document.cookie.split(";");
+  for (const cookie of cookies) {
+    const [name, value] = cookie.trim().split("=");
+    // Stack Auth stores access token in a cookie with this pattern
+    if (name.includes("stack-access-token") || name === "stack-access") {
+      return decodeURIComponent(value);
+    }
+  }
+  return null;
+}
+
+/**
  * Hook to automatically sync Stack Auth users with InstantDB.
  *
  * This hook ensures InstantDB authentication state always follows Stack Auth:
@@ -106,10 +124,16 @@ export function useInstantDBAuth() {
       }
 
       try {
+        // Get access token for iframe-safe authentication
+        // In iframe contexts, cookies may be blocked, so we send the token via header
+        // Stack Auth stores the access token in cookies with "cookie" tokenStore
+        const accessToken = getStackAccessToken();
+        
         const response = await fetch("/api/auth/instantdb", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            ...(accessToken && { "X-Stack-Access-Token": accessToken }),
           },
           credentials: "include",
         });
