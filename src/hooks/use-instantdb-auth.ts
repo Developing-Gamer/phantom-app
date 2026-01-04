@@ -125,6 +125,10 @@ export function useInstantDBAuth() {
 
         if (!isMounted) return;
 
+        if (!token) {
+          throw new Error("No token received from authentication endpoint");
+        }
+
         await db.auth.signInWithToken(token);
 
         lastStackUserIdRef.current = currentStackUserId;
@@ -135,8 +139,26 @@ export function useInstantDBAuth() {
       } catch (err) {
         if (!isMounted) return;
 
-        console.error("InstantDB authentication error:", err);
-        setError(err instanceof Error ? err.message : "Authentication failed");
+        // Suppress transient network errors that are usually temporary
+        // These are often connection issues that resolve on retry
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const isTransientError =
+          errorMessage.includes("Failed to fetch") ||
+          errorMessage.includes("ERR_CONNECTION") ||
+          errorMessage.includes("NetworkError") ||
+          errorMessage.includes("network");
+
+        if (isTransientError) {
+          // Log to console but don't show to user (will retry on next render)
+          console.warn(
+            "Transient InstantDB auth error (will retry):",
+            errorMessage
+          );
+        } else {
+          // Only set user-facing errors for non-transient issues
+          console.error("InstantDB authentication error:", err);
+          setError(errorMessage);
+        }
       } finally {
         if (isMounted) {
           setIsAuthenticating(false);

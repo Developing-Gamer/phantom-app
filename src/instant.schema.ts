@@ -24,7 +24,19 @@ const schema = i.schema({
     // Add your links here
     // InstantDB relies on a graph-based linking system.
     // Always use db.tx.entity[id].link({ label: otherId }) in transactions.
-    // Example:
+    //
+    // IMPORTANT: When creating entities that belong to users:
+    // - Define a link between your entity and $users
+    // - Use .link({ user: userId }) when creating the entity
+    // - This enables permission rules like: auth.id in data.ref('user.id')
+    //
+    // Example for profiles linked to users:
+    // profileUser: {
+    //   forward: { on: "profiles", has: "one", label: "user" },
+    //   reverse: { on: "$users", has: "one", label: "profile" },
+    // },
+    //
+    // Example for posts with many-to-one relationship:
     // chatMessages: {
     //   forward: { on: "chats", has: "many", label: "messages" },
     //   reverse: { on: "messages", has: "one", label: "chat" },
