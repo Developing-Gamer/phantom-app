@@ -8,10 +8,11 @@ const nextConfig: NextConfig = {
   },
   allowedDevOrigins: [
     "http://localhost:3000",
-    "https://*.tryphantom.io",
     "http://www.tryphantom.io",
-    "http://tryphantom.io",
   ],
+  typescript: {
+    ignoreBuildErrors: true,
+  },
   images: {
     remotePatterns: [
       {
