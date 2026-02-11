@@ -239,17 +239,26 @@ const main = async () => {
     return;
   }
 
+  const totalErrors = filesWithErrors.reduce(
+    (sum, entry) => sum + entry.errors.length,
+    0
+  );
+
   const lines = [];
+  lines.push(
+    `Parse error: Found ${totalErrors} syntax error(s) in ${filesWithErrors.length} file(s):`
+  );
+  lines.push("");
   for (const entry of filesWithErrors) {
-    lines.push(entry.file);
     for (const err of entry.errors) {
       const location =
         err.line && err.column ? `:${err.line}:${err.column}` : "";
-      lines.push(`  - ${err.message}${location}`);
+      lines.push(`error: ${entry.file}${location} - ${err.message}`);
       if (err.codeframe) {
         for (const frameLine of err.codeframe.trim().split("\n")) {
           lines.push(`    ${frameLine}`);
         }
+        lines.push("");
         continue;
       }
       if (err.context?.lines?.length) {
@@ -259,10 +268,12 @@ const main = async () => {
             lines.push(`      | ${err.context.indicator}`);
           }
         }
+        lines.push("");
       }
     }
   }
   process.stdout.write(`${lines.join("\n")}\n`);
+  process.exit(1);
 };
 
 main();
