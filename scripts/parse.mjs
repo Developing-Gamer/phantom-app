@@ -17,7 +17,7 @@ const readStdin = () =>
     process.stdin.on("error", reject);
   });
 
-const usage = () => {
+const _usage = () => {
   console.error("Usage:");
   console.error("  npm run parser -- path/to/file.tsx");
   console.error("  npm run parser -- path/to/folder");

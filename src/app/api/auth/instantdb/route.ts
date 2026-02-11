@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     // Try to get user from cookies first (normal context)
     try {
       user = await stackServerApp.getUser();
-    } catch (cookieError) {
+    } catch {
       // If cookie access fails (e.g., in iframe), try to get access token from header
       const accessToken = request.headers.get("x-stack-access-token");
 

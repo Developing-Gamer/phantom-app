@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "NEXT_IGNORE_ESLINT=1 next build --turbopack",
-    "lint": "next lint",
+    "lint": "eslint .",
     "parser": "node scripts/parse.mjs",
     "clean": "rm -rf .next node_modules",
     "db:push": "instant-cli push",
@@ -69,6 +69,8 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "^16",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

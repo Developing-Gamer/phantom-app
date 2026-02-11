@@ -195,7 +195,7 @@ export function useInstantDBAuth() {
     return () => {
       isMounted = false;
     };
-  }, [stackUser?.id, instantAuth.user?.id]);
+  }, [stackUser?.id, stackUser, instantAuth.user?.id, instantAuth.user]);
 
   return { isAuthenticating, error };
 }

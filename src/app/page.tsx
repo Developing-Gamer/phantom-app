@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState, useEffect } from "react";
+import Link from "next/link";
 import { useUser, UserButton } from "@stackframe/stack";
 import { db } from "@/lib/db";
 
@@ -34,18 +35,18 @@ function AuthenticatedContent() {
           Welcome! Please sign in to access your dashboard and sync with InstantDB.
         </p>
         <div className="flex gap-4">
-          <a
+          <Link
             href="/handler/sign-in"
             className="px-6 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-all font-medium"
           >
             Sign In
-          </a>
-          <a
+          </Link>
+          <Link
             href="/handler/sign-up"
             className="px-6 py-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground rounded-md transition-all font-medium"
           >
             Sign Up
-          </a>
+          </Link>
         </div>
       </div>
     );
