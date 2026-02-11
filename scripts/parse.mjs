@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { parseSync } from "oxc-parser";
+import ts from "typescript";
 
 const args = process.argv.slice(2);
 const fileArg = args[0];
@@ -23,6 +23,39 @@ const usage = () => {
   console.error("  npm run parser -- path/to/folder");
   console.error("  npm run parser (defaults to ./src)");
   console.error("  cat file.tsx | npm run parser");
+};
+
+const isNativeBindingError = (error) => {
+  const stack = [];
+  let current = error;
+
+  while (current) {
+    stack.push(current);
+    current = current.cause;
+  }
+
+  return stack.some((entry) => {
+    const message = String(entry?.message ?? "");
+    return (
+      message.includes("Cannot find native binding") ||
+      message.includes("MODULE_NOT_FOUND")
+    );
+  });
+};
+
+const loadOxcParseSync = async () => {
+  try {
+    const mod = await import("oxc-parser");
+    return mod?.parseSync ?? null;
+  } catch (error) {
+    if (isNativeBindingError(error)) {
+      console.warn(
+        "oxc-parser native bindings are unavailable; falling back to the TypeScript parser."
+      );
+      return null;
+    }
+    throw error;
+  }
 };
 
 const listSourceFiles = async (rootDir) => {
@@ -77,10 +110,55 @@ const getLineContext = (code, line, column, radius = 2) => {
   return { lines, indicator };
 };
 
-const parseFile = async (filename) => {
+const getScriptKindFromFilename = (filename) => {
+  const ext = path.extname(filename).toLowerCase();
+  if (ext === ".tsx") return ts.ScriptKind.TSX;
+  if (ext === ".jsx") return ts.ScriptKind.JSX;
+  if (ext === ".js" || ext === ".mjs" || ext === ".cjs") return ts.ScriptKind.JS;
+  return ts.ScriptKind.TS;
+};
+
+const parseWithTypeScript = (filename, code) => {
+  const source = ts.createSourceFile(
+    filename,
+    code,
+    ts.ScriptTarget.Latest,
+    true,
+    getScriptKindFromFilename(filename)
+  );
+
+  const errors = (source.parseDiagnostics ?? []).map((diag) => {
+    const position = source.getLineAndCharacterOfPosition(diag.start ?? 0);
+    const line = (position?.line ?? 0) + 1;
+    const column = (position?.character ?? 0) + 1;
+    return {
+      message: ts.flattenDiagnosticMessageText(diag.messageText, "\n"),
+      line,
+      column,
+      codeframe: null,
+      context: getLineContext(code, line, column, 2),
+    };
+  });
+
+  return {
+    errors,
+    comments: [],
+    module: "unknown",
+    program: null,
+  };
+};
+
+const parseWithSelectedParser = (filename, code, parseSync) => {
+  if (parseSync) {
+    return parseSync(filename, code);
+  }
+  return parseWithTypeScript(filename, code);
+};
+
+const parseFile = async (filename, parseSync) => {
   try {
     const code = await fs.readFile(filename, "utf8");
-    const result = parseSync(filename, code);
+    const result = parseWithSelectedParser(filename, code, parseSync);
     const formattedErrors = (result.errors ?? []).map((error) => {
       const label = error?.labels?.[0];
       const position = offsetToLineColumn(code, label?.start);
@@ -110,10 +188,12 @@ const parseFile = async (filename) => {
 };
 
 const main = async () => {
+  const parseSync = await loadOxcParseSync();
+
   if (!fileArg && !process.stdin.isTTY) {
     const code = await readStdin();
     const filename = "stdin.tsx";
-    const result = parseSync(filename, code);
+    const result = parseWithSelectedParser(filename, code, parseSync);
     process.stdout.write(
       `${JSON.stringify(
         {
@@ -133,7 +213,7 @@ const main = async () => {
   try {
     const stats = await fs.stat(target);
     if (stats.isFile()) {
-      const parsed = await parseFile(target);
+      const parsed = await parseFile(target, parseSync);
       process.stdout.write(`${JSON.stringify(parsed, null, 2)}\n`);
       return;
     }
@@ -147,7 +227,9 @@ const main = async () => {
 
   const rootDir = path.resolve(target);
   const files = await listSourceFiles(rootDir);
-  const results = await Promise.all(files.map((file) => parseFile(file)));
+  const results = await Promise.all(
+    files.map((file) => parseFile(file, parseSync))
+  );
   const filesWithErrors = results.filter(
     (result) => Array.isArray(result.errors) && result.errors.length > 0
   );
