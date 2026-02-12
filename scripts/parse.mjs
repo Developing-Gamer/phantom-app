@@ -6,6 +6,10 @@ const args = process.argv.slice(2);
 const fileArg = args[0];
 const supportedExts = new Set([".js", ".jsx", ".ts", ".tsx"]);
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 const readStdin = () =>
   new Promise((resolve, reject) => {
     let data = "";
@@ -16,14 +20,6 @@ const readStdin = () =>
     process.stdin.on("end", () => resolve(data));
     process.stdin.on("error", reject);
   });
-
-const _usage = () => {
-  console.error("Usage:");
-  console.error("  npm run parser -- path/to/file.tsx");
-  console.error("  npm run parser -- path/to/folder");
-  console.error("  npm run parser (defaults to ./src)");
-  console.error("  cat file.tsx | npm run parser");
-};
 
 const isNativeBindingError = (error) => {
   const stack = [];
@@ -49,12 +45,16 @@ const loadOxcParseSync = async () => {
     return mod?.parseSync ?? null;
   } catch (error) {
     if (isNativeBindingError(error)) {
-      console.warn(
-        "oxc-parser native bindings are unavailable; falling back to the TypeScript parser."
+      console.log(
+        "[parser] oxc-parser native bindings unavailable; falling back to TypeScript parser."
       );
       return null;
     }
-    throw error;
+    // Non-binding error: log clearly and fall back instead of crashing.
+    console.log(
+      `[parser] Failed to load oxc-parser: ${error?.message ?? error}; falling back to TypeScript parser.`
+    );
+    return null;
   }
 };
 
@@ -118,6 +118,10 @@ const getScriptKindFromFilename = (filename) => {
   return ts.ScriptKind.TS;
 };
 
+// ---------------------------------------------------------------------------
+// Parsers
+// ---------------------------------------------------------------------------
+
 const parseWithTypeScript = (filename, code) => {
   const source = ts.createSourceFile(
     filename,
@@ -155,11 +159,15 @@ const parseWithSelectedParser = (filename, code, parseSync) => {
   return parseWithTypeScript(filename, code);
 };
 
-const parseFile = async (filename, parseSync) => {
-  try {
-    const code = await fs.readFile(filename, "utf8");
-    const result = parseWithSelectedParser(filename, code, parseSync);
-    const formattedErrors = (result.errors ?? []).map((error) => {
+// ---------------------------------------------------------------------------
+// File parsing with proper error format normalisation
+// ---------------------------------------------------------------------------
+
+const normalizeErrors = (rawErrors, code, usedOxc) => {
+  return (rawErrors ?? []).map((error) => {
+    // oxc-parser format: errors have .labels[].start (byte offset) and .codeframe
+    // TypeScript format: errors already have .line, .column, .context
+    if (usedOxc) {
       const label = error?.labels?.[0];
       const position = offsetToLineColumn(code, label?.start);
       const context = getLineContext(code, position.line, position.column, 2);
@@ -170,7 +178,24 @@ const parseFile = async (filename, parseSync) => {
         codeframe: error?.codeframe ?? null,
         context,
       };
-    });
+    }
+
+    // TypeScript parser: position is already computed, preserve it.
+    return {
+      message: error?.message ?? "Unknown parse error",
+      line: error?.line ?? null,
+      column: error?.column ?? null,
+      codeframe: error?.codeframe ?? null,
+      context: error?.context ?? { lines: [], indicator: "" },
+    };
+  });
+};
+
+const parseFile = async (filename, parseSync) => {
+  try {
+    const code = await fs.readFile(filename, "utf8");
+    const result = parseWithSelectedParser(filename, code, parseSync);
+    const formattedErrors = normalizeErrors(result.errors, code, !!parseSync);
     return {
       file: filename,
       errors: formattedErrors,
@@ -180,80 +205,34 @@ const parseFile = async (filename, parseSync) => {
       file: filename,
       errors: [
         {
-          message: error?.message ?? String(error),
+          message: `Failed to read/parse file: ${error?.message ?? String(error)}`,
+          line: null,
+          column: null,
+          codeframe: null,
+          context: { lines: [], indicator: "" },
         },
       ],
     };
   }
 };
 
-const main = async () => {
-  const parseSync = await loadOxcParseSync();
+// ---------------------------------------------------------------------------
+// Output formatting
+// ---------------------------------------------------------------------------
 
-  if (!fileArg && !process.stdin.isTTY) {
-    const code = await readStdin();
-    const filename = "stdin.tsx";
-    const result = parseWithSelectedParser(filename, code, parseSync);
-    process.stdout.write(
-      `${JSON.stringify(
-        {
-          errors: result.errors,
-          comments: result.comments,
-          module: result.module,
-          program: result.program,
-        },
-        null,
-        2
-      )}\n`
-    );
-    return;
-  }
-
-  let target = fileArg ?? "src";
-  try {
-    const stats = await fs.stat(target);
-    if (stats.isFile()) {
-      const parsed = await parseFile(target, parseSync);
-      process.stdout.write(`${JSON.stringify(parsed, null, 2)}\n`);
-      return;
-    }
-  } catch (error) {
-    if (fileArg) {
-      console.error(`Failed to read path: ${fileArg}`);
-      console.error(error?.message ?? error);
-      process.exit(1);
-    }
-  }
-
-  const rootDir = path.resolve(target);
-  const files = await listSourceFiles(rootDir);
-  const results = await Promise.all(
-    files.map((file) => parseFile(file, parseSync))
-  );
-  const filesWithErrors = results.filter(
-    (result) => Array.isArray(result.errors) && result.errors.length > 0
-  );
-
-  if (filesWithErrors.length === 0) {
-    process.stdout.write("No parse errors found.\n");
-    return;
-  }
-
-  const totalErrors = filesWithErrors.reduce(
-    (sum, entry) => sum + entry.errors.length,
-    0
-  );
-
+const formatHumanReadable = (filesWithErrors, totalErrors) => {
   const lines = [];
   lines.push(
     `Parse error: Found ${totalErrors} syntax error(s) in ${filesWithErrors.length} file(s):`
   );
   lines.push("");
+
   for (const entry of filesWithErrors) {
     for (const err of entry.errors) {
       const location =
         err.line && err.column ? `:${err.line}:${err.column}` : "";
       lines.push(`error: ${entry.file}${location} - ${err.message}`);
+
       if (err.codeframe) {
         for (const frameLine of err.codeframe.trim().split("\n")) {
           lines.push(`    ${frameLine}`);
@@ -263,8 +242,9 @@ const main = async () => {
       }
       if (err.context?.lines?.length) {
         for (const ctxLine of err.context.lines) {
-          lines.push(`    ${ctxLine.line} | ${ctxLine.content}`);
-          if (ctxLine.line === err.line) {
+          const marker = ctxLine.line === err.line ? ">" : " ";
+          lines.push(`  ${marker} ${ctxLine.line} | ${ctxLine.content}`);
+          if (ctxLine.line === err.line && err.context.indicator) {
             lines.push(`      | ${err.context.indicator}`);
           }
         }
@@ -272,8 +252,146 @@ const main = async () => {
       }
     }
   }
-  process.stdout.write(`${lines.join("\n")}\n`);
+
+  return lines.join("\n");
+};
+
+const formatJsonSummary = (filesWithErrors, totalErrors, totalFiles) => {
+  const summary = {
+    passed: false,
+    totalFiles,
+    totalErrors,
+    filesWithErrors: filesWithErrors.length,
+    errors: filesWithErrors.flatMap((entry) =>
+      entry.errors.map((err) => ({
+        file: entry.file,
+        line: err.line,
+        column: err.column,
+        message: err.message,
+      }))
+    ),
+  };
+  return JSON.stringify(summary);
+};
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+const main = async () => {
+  const parseSync = await loadOxcParseSync();
+  const parserName = parseSync ? "oxc-parser" : "typescript";
+  console.log(`[parser] Using ${parserName} parser.`);
+
+  // --- stdin mode ---
+  // Only read from stdin when explicitly requested via --stdin flag.
+  // Relying on !process.stdin.isTTY causes hangs in non-interactive environments
+  // (sandboxes, CI, background processes) where isTTY is undefined but no data
+  // is actually being piped.
+  if (fileArg === "--stdin" || fileArg === "-") {
+    const code = await readStdin();
+    const filename = "stdin.tsx";
+    const result = parseWithSelectedParser(filename, code, parseSync);
+    const normalizedErrors = normalizeErrors(result.errors, code, !!parseSync);
+    const parsed = {
+      file: filename,
+      errors: normalizedErrors,
+      comments: result.comments ?? [],
+      module: result.module ?? null,
+      program: result.program ?? null,
+    };
+    process.stdout.write(
+      `${JSON.stringify(parsed, null, 2)}\n`
+    );
+    if (normalizedErrors.length > 0) {
+      process.exit(1);
+    }
+    return;
+  }
+
+  // --- single file or directory mode ---
+  let target = fileArg && fileArg !== "--stdin" && fileArg !== "-" ? fileArg : "src";
+  try {
+    const stats = await fs.stat(target);
+    if (stats.isFile()) {
+      const parsed = await parseFile(target, parseSync);
+      process.stdout.write(`${JSON.stringify(parsed, null, 2)}\n`);
+      if (parsed.errors.length > 0) {
+        process.exit(1);
+      }
+      return;
+    }
+  } catch (error) {
+    if (fileArg) {
+      console.log(
+        `error: Failed to read path "${fileArg}": ${error?.message ?? error}`
+      );
+      process.exit(1);
+    }
+    // No fileArg — fall through to directory scan of "src"
+  }
+
+  // --- directory scan mode ---
+  const rootDir = path.resolve(target);
+  let files;
+  try {
+    files = await listSourceFiles(rootDir);
+  } catch (error) {
+    console.log(
+      `error: Failed to scan directory "${rootDir}": ${error?.message ?? error}`
+    );
+    process.exit(1);
+  }
+
+  console.log(`[parser] Scanning ${files.length} source file(s) in ${rootDir}`);
+
+  const results = await Promise.all(
+    files.map((file) => parseFile(file, parseSync))
+  );
+  const filesWithErrors = results.filter(
+    (result) => Array.isArray(result.errors) && result.errors.length > 0
+  );
+
+  if (filesWithErrors.length === 0) {
+    console.log(
+      `[parser] Success: parsed ${files.length} file(s) with 0 errors.`
+    );
+    return;
+  }
+
+  const totalErrors = filesWithErrors.reduce(
+    (sum, entry) => sum + entry.errors.length,
+    0
+  );
+
+  // Human-readable output with file locations and code context.
+  process.stdout.write(`${formatHumanReadable(filesWithErrors, totalErrors)}\n`);
+
+  // Machine-readable JSON summary on a single line for automated extraction.
+  process.stdout.write(
+    `\n__PARSER_RESULT__${formatJsonSummary(filesWithErrors, totalErrors, files.length)}\n`
+  );
+
   process.exit(1);
 };
 
-main();
+main().catch((error) => {
+  // Top-level safety net: if anything in main() throws unexpectedly, output a
+  // clear, extractable error instead of crashing silently.
+  const message = error?.message ?? String(error);
+  const stack = error?.stack ?? "";
+  console.log(`error: Parser crashed unexpectedly: ${message}`);
+  if (stack) {
+    console.log(stack);
+  }
+  console.log(
+    `\n__PARSER_RESULT__${JSON.stringify({
+      passed: false,
+      totalFiles: 0,
+      totalErrors: 1,
+      filesWithErrors: 0,
+      errors: [{ file: "unknown", line: null, column: null, message: `Parser internal error: ${message}` }],
+    })}\n`
+  );
+  process.exit(1);
+});
