@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { ErrorBoundary, type FallbackProps } from "react-error-boundary"
+import { ThemeProvider } from "next-themes"
 
 import { TRPCProvider } from "@/lib/trpc/client"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -22,9 +23,16 @@ function AppErrorFallback({ error }: FallbackProps) {
 export function AppProviders({ children }: { children: React.ReactNode }) {
   return (
     <ErrorBoundary FallbackComponent={AppErrorFallback}>
-      <TRPCProvider>
-        <TooltipProvider>{children}</TooltipProvider>
-      </TRPCProvider>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        enableColorScheme
+      >
+        <TRPCProvider>
+          <TooltipProvider>{children}</TooltipProvider>
+        </TRPCProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   )
 }

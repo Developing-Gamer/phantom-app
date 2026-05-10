@@ -3,6 +3,7 @@ import { StackProvider, StackTheme } from "@stackframe/stack";
 import { stackClientApp } from "@/stack/client";
 import { AppProviders } from "@/components/app-providers";
 import { AuthSyncProvider } from "@/components/auth-sync-provider";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -34,6 +35,7 @@ export default function RootLayout({
               <AuthSyncProvider>
                 {children}
               </AuthSyncProvider>
+              <ThemeToggle />
             </AppProviders>
           </StackTheme>
         </StackProvider>
