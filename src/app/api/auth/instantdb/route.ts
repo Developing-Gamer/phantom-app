@@ -1,93 +1,151 @@
-import { NextResponse } from "next/server";
-import { stackServerApp } from "@/stack/server";
-import { init } from "@instantdb/admin";
+import { NextResponse } from "next/server"
 
-const adminDb = init({
-  appId: process.env.NEXT_PUBLIC_INSTANT_APP_ID!,
-  adminToken: process.env.INSTANT_ADMIN_TOKEN!,
-});
+import { getInstantAdminDb, InstantAdminConfigError } from "@/lib/instant-admin"
+import { resolveStackInstantUser } from "@/lib/stack-instant-auth"
 
-/**
- * API endpoint to generate InstantDB authentication tokens for Stack Auth users.
- *
- * This endpoint bridges Stack Auth and InstantDB authentication systems by:
- * 1. Verifying the user is authenticated with Stack Auth (via cookies OR X-Stack-Access-Token header)
- * 2. Creating a matching InstantDB token with the same user ID
- * 3. Returning the token for the client to use with db.auth.signInWithToken()
- *
- * This ensures that:
- * - InstantDB user IDs match Stack Auth user IDs (user.id === auth.id)
- * - Permissions and data access are properly scoped to the authenticated user
- * - All Stack Auth methods (password, OAuth, magic link, etc.) work seamlessly
- * - Works in iframe contexts where third-party cookies may be blocked
- *
- * Security:
- * - Only authenticated Stack Auth users can get tokens
- * - Tokens are short-lived and single-use
- * - User IDs are verified server-side before token generation
- */
+type TimingMarks = {
+  stackVerify?: number
+  instantToken?: number
+  total?: number
+}
+
+function now() {
+  return performance.now()
+}
+
+function durationSince(start: number) {
+  return Math.max(0, now() - start)
+}
+
+function buildHeaders(timings: TimingMarks = {}) {
+  const headers = new Headers({
+    "Cache-Control": "no-store",
+    Vary: "Authorization, Cookie",
+  })
+
+  if (process.env.NODE_ENV === "development") {
+    const values = [
+      timings.stackVerify != null
+        ? `stack_verify;dur=${timings.stackVerify.toFixed(1)}`
+        : null,
+      timings.instantToken != null
+        ? `instant_token;dur=${timings.instantToken.toFixed(1)}`
+        : null,
+      timings.total != null ? `total;dur=${timings.total.toFixed(1)}` : null,
+    ].filter(Boolean)
+
+    if (values.length > 0) {
+      headers.set("Server-Timing", values.join(", "))
+    }
+  }
+
+  return headers
+}
+
+function json(
+  body: Record<string, unknown>,
+  init: {
+    status: number
+    timings?: TimingMarks
+  }
+) {
+  return NextResponse.json(body, {
+    status: init.status,
+    headers: buildHeaders(init.timings),
+  })
+}
+
+function logAuthIssue(input: {
+  message: string
+  authPath?: string
+  userId?: string
+  durationMs: number
+  error?: unknown
+}) {
+  if (process.env.NODE_ENV !== "development") return
+
+  console.warn("[instant-auth]", {
+    message: input.message,
+    authPath: input.authPath,
+    userIdPrefix: input.userId?.slice(0, 8),
+    durationMs: Math.round(input.durationMs),
+    error:
+      input.error instanceof Error
+        ? { name: input.error.name, message: input.error.message }
+        : undefined,
+  })
+}
+
 export async function POST(request: Request) {
+  const totalStart = now()
+  const timings: TimingMarks = {}
+  let authPath = "none"
+  let userId: string | undefined
+
   try {
-    let user;
+    const stackStart = now()
+    const stackResult = await resolveStackInstantUser(request, {
+      getSdkUser: async (req) => {
+        const { stackServerApp } = await import("@/stack/server")
 
-    // Try to get user from cookies first (normal context)
-    try {
-      user = await stackServerApp.getUser();
-    } catch {
-      // If cookie access fails (e.g., in iframe), try to get access token from header
-      const accessToken = request.headers.get("x-stack-access-token");
-
-      if (accessToken) {
-        // Create a new StackServerApp instance with the access token from the request
-        // This allows authentication in iframe contexts where cookies are blocked
-        const { StackServerApp } = await import("@stackframe/stack");
-        const tokenBasedApp = new StackServerApp({
-          tokenStore: {
-            accessToken,
-            refreshToken: "", // Not needed for read-only operations
-          },
-        });
-        user = await tokenBasedApp.getUser();
-      }
-    }
-
-    if (!user) {
-      return NextResponse.json(
-        { error: "Unauthorized: No Stack Auth session found" },
-        { status: 401 }
-      );
-    }
-
-    if (!user.id) {
-      console.error("Stack Auth user missing ID:", user);
-      return NextResponse.json(
-        { error: "Invalid user data: missing user ID" },
-        { status: 500 }
-      );
-    }
-
-    // Explicitly set id to match Stack Auth ID so that:
-    // - auth.id (InstantDB) === user.id (Stack Auth)
-    // - Database queries can use Stack Auth IDs as foreign keys
-    // - Permissions work correctly across both systems
-    const token = await adminDb.auth.createToken({
-      id: user.id,
-      // Optional: Include email if you want it available in InstantDB's $users
-      // email: user.primaryEmail || undefined,
-    });
-
-    return NextResponse.json({ token });
-  } catch (error) {
-    console.error("Error generating InstantDB token:", error);
-
-    return NextResponse.json(
-      {
-        error: "Failed to generate authentication token",
-        ...(process.env.NODE_ENV === "development" && {
-          details: error instanceof Error ? error.message : String(error),
-        }),
+        return stackServerApp.getUser({
+          tokenStore: req,
+          or: "return-null",
+        })
       },
-      { status: 500 }
-    );
+    })
+    timings.stackVerify = durationSince(stackStart)
+    authPath = stackResult.authPath
+    userId = stackResult.user?.id
+
+    if (!stackResult.user) {
+      timings.total = durationSince(totalStart)
+      return json({ error: "unauthorized" }, { status: 401, timings })
+    }
+
+    const instantStart = now()
+    const token = await getInstantAdminDb().auth.createToken({
+      id: stackResult.user.id,
+    })
+    timings.instantToken = durationSince(instantStart)
+    timings.total = durationSince(totalStart)
+
+    if (process.env.NODE_ENV === "development") {
+      console.info("[instant-auth]", {
+        message: "created InstantDB token",
+        authPath,
+        userIdPrefix: userId?.slice(0, 8),
+        durationMs: Math.round(timings.total),
+      })
+    }
+
+    return json({ token }, { status: 200, timings })
+  } catch (error) {
+    timings.total = durationSince(totalStart)
+
+    logAuthIssue({
+      message: "failed to create InstantDB token",
+      authPath,
+      userId,
+      durationMs: timings.total,
+      error,
+    })
+
+    if (error instanceof InstantAdminConfigError) {
+      return json(
+        {
+          error: "missing_instant_env",
+          missing: error.missing,
+        },
+        { status: 500, timings }
+      )
+    }
+
+    return json(
+      {
+        error: "instant_auth_failed",
+      },
+      { status: 500, timings }
+    )
   }
 }
