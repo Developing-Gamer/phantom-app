@@ -5,6 +5,7 @@ export const db = init<AppSchema>({
   appId: process.env.NEXT_PUBLIC_INSTANT_APP_ID!,
   schema,
   devtool: false,
+  firstPartyPath: "/api/instant",
 });
 
 /**
