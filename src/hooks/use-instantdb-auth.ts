@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useReducer, useRef } from "react";
 import { useUser } from "@stackframe/stack";
 import { db } from "@/lib/db";
 
@@ -13,7 +13,7 @@ function getStackAccessToken(): string | null {
   for (const cookie of cookies) {
     const [name, value] = cookie.trim().split("=");
     // Stack Auth stores access token in a cookie with this pattern
-    if (name.includes("stack-access-token") || name === "stack-access") {
+    if (/stack-access-token|^stack-access$/.test(name)) {
       return decodeURIComponent(value);
     }
   }
@@ -39,14 +39,29 @@ function getStackAccessToken(): string | null {
 export function useInstantDBAuth() {
   const stackUser = useUser();
   const instantAuth = db.useAuth();
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [authState, dispatchAuthState] = useReducer(
+    (
+      _state: {
+        isAuthenticating: boolean;
+        error: string | null;
+      },
+      nextState: {
+        isAuthenticating: boolean;
+        error: string | null;
+      }
+    ) => nextState,
+    {
+      isAuthenticating: false,
+      error: null,
+    }
+  );
 
   const lastStackUserIdRef = useRef<string | null>(null);
   const isSigningOutRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
+    const controller = new AbortController();
 
     const syncAuth = async () => {
       const currentStackUserId = stackUser?.id || null;
@@ -59,16 +74,19 @@ export function useInstantDBAuth() {
         try {
           await db.auth.signOut();
           lastStackUserIdRef.current = null;
+          if (isMounted) {
+            dispatchAuthState({ isAuthenticating: false, error: null });
+          }
         } catch (err) {
           console.error("InstantDB sign out error:", err);
           if (isMounted) {
-            setError(err instanceof Error ? err.message : "Sign out failed");
+            dispatchAuthState({
+              isAuthenticating: false,
+              error: err instanceof Error ? err.message : "Sign out failed",
+            });
           }
         } finally {
           isSigningOutRef.current = false;
-          if (isMounted) {
-            setIsAuthenticating(false);
-          }
         }
         return;
       }
@@ -76,8 +94,7 @@ export function useInstantDBAuth() {
       // Case 2: No Stack user and no InstantDB user - nothing to do
       if (!stackUser) {
         if (isMounted) {
-          setIsAuthenticating(false);
-          setError(null);
+          dispatchAuthState({ isAuthenticating: false, error: null });
         }
         return;
       }
@@ -96,7 +113,6 @@ export function useInstantDBAuth() {
             "Account switch detected, signing out old InstantDB session"
           );
           await db.auth.signOut();
-          await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (err) {
           console.error("InstantDB sign out error during account switch:", err);
         } finally {
@@ -111,16 +127,14 @@ export function useInstantDBAuth() {
         lastStackUserIdRef.current === currentStackUserId
       ) {
         if (isMounted) {
-          setIsAuthenticating(false);
-          setError(null);
+          dispatchAuthState({ isAuthenticating: false, error: null });
         }
         return;
       }
 
       // Case 5: Stack Auth signed in but InstantDB not authenticated (or wrong user)
       if (isMounted) {
-        setIsAuthenticating(true);
-        setError(null);
+        dispatchAuthState({ isAuthenticating: true, error: null });
       }
 
       try {
@@ -136,6 +150,7 @@ export function useInstantDBAuth() {
             ...(accessToken && { "X-Stack-Access-Token": accessToken }),
           },
           credentials: "include",
+          signal: controller.signal,
         });
 
         if (!response.ok) {
@@ -158,10 +173,11 @@ export function useInstantDBAuth() {
         lastStackUserIdRef.current = currentStackUserId;
 
         if (isMounted) {
-          setError(null);
+          dispatchAuthState({ isAuthenticating: false, error: null });
         }
       } catch (err) {
         if (!isMounted) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
 
         // Suppress transient network errors that are usually temporary
         // These are often connection issues that resolve on retry
@@ -178,14 +194,11 @@ export function useInstantDBAuth() {
             "Transient InstantDB auth error (will retry):",
             errorMessage
           );
+          dispatchAuthState({ isAuthenticating: false, error: null });
         } else {
           // Only set user-facing errors for non-transient issues
           console.error("InstantDB authentication error:", err);
-          setError(errorMessage);
-        }
-      } finally {
-        if (isMounted) {
-          setIsAuthenticating(false);
+          dispatchAuthState({ isAuthenticating: false, error: errorMessage });
         }
       }
     };
@@ -194,8 +207,9 @@ export function useInstantDBAuth() {
 
     return () => {
       isMounted = false;
+      controller.abort();
     };
   }, [stackUser?.id, stackUser, instantAuth.user?.id, instantAuth.user]);
 
-  return { isAuthenticating, error };
+  return authState;
 }
