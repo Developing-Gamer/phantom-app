@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
+import { Suspense } from "react";
 import Link from "next/link";
 import { useUser, UserButton } from "@stackframe/stack";
 import { db } from "@/lib/db";
@@ -8,25 +8,14 @@ import { trpc } from "@/lib/trpc/client";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LoadingIndicator } from "@/components/ui/loading-indicator";
 
 function AuthenticatedContent() {
   const stackUser = useUser();
   const instantAuth = db.useAuth();
   const health = trpc.health.useQuery({ source: "dashboard" });
-  const [isForceIdle, setIsForceIdle] = useState(false);
-
-  useEffect(() => {
-    if (!stackUser) return;
-
-    const timeout = setTimeout(() => {
-      setIsForceIdle(true);
-    }, 10000);
-
-    return () => clearTimeout(timeout);
-  }, [stackUser]);
 
   const isLoading =
-    !isForceIdle &&
     (stackUser && !instantAuth.user);
 
   if (isLoading) {
@@ -132,10 +121,7 @@ function StatusCard({
 
 function LoadingState({ message = "Loading..." }: { message?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-4">
-      <div className="size-10 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-      <p className="text-sm font-medium animate-pulse text-muted-foreground">{message}</p>
-    </div>
+    <LoadingIndicator label={message} />
   );
 }
 

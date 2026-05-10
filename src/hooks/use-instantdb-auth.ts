@@ -1,215 +1,252 @@
-import { useEffect, useReducer, useRef } from "react";
-import { useUser } from "@stackframe/stack";
-import { db } from "@/lib/db";
+import { useEffect, useReducer, useRef } from "react"
+import { useStackApp, useUser } from "@stackframe/stack"
 
-/**
- * Helper function to extract Stack Auth access token from cookies.
- * This is necessary for iframe contexts where third-party cookies may be blocked.
- */
-function getStackAccessToken(): string | null {
-  if (typeof document === "undefined") return null;
-  
-  const cookies = document.cookie.split(";");
-  for (const cookie of cookies) {
-    const [name, value] = cookie.trim().split("=");
-    // Stack Auth stores access token in a cookie with this pattern
-    if (/stack-access-token|^stack-access$/.test(name)) {
-      return decodeURIComponent(value);
-    }
+import { db } from "@/lib/db"
+
+export type InstantAuthSyncStatus =
+  | "idle"
+  | "syncing"
+  | "synced"
+  | "signing-out"
+  | "error"
+
+export type InstantAuthSyncState = {
+  status: InstantAuthSyncStatus
+  isAuthenticating: boolean
+  error: string | null
+  stackUserId: string | null
+  instantUserId: string | null
+}
+
+const RETRY_DELAYS_MS = [250, 750, 1500] as const
+
+function createState(input: {
+  status: InstantAuthSyncStatus
+  error?: string | null
+  stackUserId: string | null
+  instantUserId: string | null
+}): InstantAuthSyncState {
+  return {
+    status: input.status,
+    isAuthenticating:
+      input.status === "syncing" || input.status === "signing-out",
+    error: input.error ?? null,
+    stackUserId: input.stackUserId,
+    instantUserId: input.instantUserId,
   }
-  return null;
+}
+
+function wait(ms: number, signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"))
+      return
+    }
+
+    const timeout = window.setTimeout(resolve, ms)
+
+    signal.addEventListener(
+      "abort",
+      () => {
+        window.clearTimeout(timeout)
+        reject(new DOMException("Aborted", "AbortError"))
+      },
+      { once: true }
+    )
+  })
+}
+
+function isAbortError(error: unknown) {
+  return error instanceof DOMException && error.name === "AbortError"
+}
+
+function isTransientAuthSyncError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+
+  return (
+    message.includes("Failed to fetch") ||
+    message.includes("ERR_CONNECTION") ||
+    message.includes("NetworkError") ||
+    message.toLowerCase().includes("network") ||
+    message.includes("503") ||
+    message.includes("502") ||
+    message.includes("504")
+  )
+}
+
+async function fetchInstantToken(input: {
+  authorization: string | null
+  signal: AbortSignal
+}) {
+  const response = await fetch("/api/auth/instantdb", {
+    method: "POST",
+    headers: {
+      ...(input.authorization ? { Authorization: input.authorization } : {}),
+    },
+    credentials: "include",
+    signal: input.signal,
+  })
+
+  if (!response.ok) {
+    let details = ""
+
+    try {
+      const body = (await response.json()) as { error?: string }
+      details = body.error ? `: ${body.error}` : ""
+    } catch {
+      details = ""
+    }
+
+    throw new Error(`InstantDB auth failed ${response.status}${details}`)
+  }
+
+  const body = (await response.json()) as { token?: unknown }
+
+  if (typeof body.token !== "string" || !body.token) {
+    throw new Error("InstantDB auth failed: missing token")
+  }
+
+  return body.token
 }
 
 /**
- * Hook to automatically sync Stack Auth users with InstantDB.
+ * Keeps InstantDB auth aligned with Stack Auth.
  *
- * This hook ensures InstantDB authentication state always follows Stack Auth:
- * - Sign in/Sign up: When a user authenticates with Stack Auth (via password, OAuth,
- *   magic link, or any other method), this hook fetches an InstantDB token from the
- *   backend and signs them into InstantDB.
- * - Sign out: When a user signs out of Stack Auth (via user.signOut(), /handler/sign-out,
- *   or any other method), this hook automatically signs them out of InstantDB.
- * - Account switching: When switching between different Stack Auth accounts, this hook
- *   properly clears the old InstantDB session before authenticating the new account,
- *   preventing data leakage.
- *
- * USAGE: Call this hook once at the root of your app (e.g., in layout.tsx or a global
- * provider component) to ensure it runs on all pages and handles all auth state changes.
+ * Stack Auth remains the source of truth. InstantDB receives short-lived
+ * custom auth tokens only when the current Instant user is missing or does not
+ * match the current Stack user.
  */
 export function useInstantDBAuth() {
-  const stackUser = useUser();
-  const instantAuth = db.useAuth();
+  const stackApp = useStackApp()
+  const stackUser = useUser()
+  const instantAuth = db.useAuth()
+  const stackUserId = stackUser?.id ?? null
+  const instantUserId = instantAuth.user?.id ?? null
   const [authState, dispatchAuthState] = useReducer(
-    (
-      _state: {
-        isAuthenticating: boolean;
-        error: string | null;
-      },
-      nextState: {
-        isAuthenticating: boolean;
-        error: string | null;
-      }
-    ) => nextState,
-    {
-      isAuthenticating: false,
-      error: null,
-    }
-  );
-
-  const lastStackUserIdRef = useRef<string | null>(null);
-  const isSigningOutRef = useRef(false);
+    (_state: InstantAuthSyncState, nextState: InstantAuthSyncState) =>
+      nextState,
+    createState({
+      status: "idle",
+      stackUserId: null,
+      instantUserId: null,
+    })
+  )
+  const inFlightUserIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    let isMounted = true;
-    const controller = new AbortController();
+    const controller = new AbortController()
+    let isMounted = true
+
+    const setState = (
+      status: InstantAuthSyncStatus,
+      error: string | null = null
+    ) => {
+      if (!isMounted) return
+
+      dispatchAuthState(
+        createState({
+          status,
+          error,
+          stackUserId,
+          instantUserId,
+        })
+      )
+    }
 
     const syncAuth = async () => {
-      const currentStackUserId = stackUser?.id || null;
+      if (!stackUserId) {
+        inFlightUserIdRef.current = null
 
-      // Case 1: Stack Auth signed out but InstantDB still signed in
-      if (!stackUser && instantAuth.user) {
-        if (isSigningOutRef.current) return;
-
-        isSigningOutRef.current = true;
-        try {
-          await db.auth.signOut();
-          lastStackUserIdRef.current = null;
-          if (isMounted) {
-            dispatchAuthState({ isAuthenticating: false, error: null });
-          }
-        } catch (err) {
-          console.error("InstantDB sign out error:", err);
-          if (isMounted) {
-            dispatchAuthState({
-              isAuthenticating: false,
-              error: err instanceof Error ? err.message : "Sign out failed",
-            });
-          }
-        } finally {
-          isSigningOutRef.current = false;
+        if (!instantUserId) {
+          setState("idle")
+          return
         }
-        return;
+
+        setState("signing-out")
+        await db.auth.signOut()
+        setState("idle")
+        return
       }
 
-      // Case 2: No Stack user and no InstantDB user - nothing to do
-      if (!stackUser) {
-        if (isMounted) {
-          dispatchAuthState({ isAuthenticating: false, error: null });
-        }
-        return;
+      if (instantUserId === stackUserId) {
+        inFlightUserIdRef.current = null
+        setState("synced")
+        return
       }
 
-      // Case 3: Account switch detected - sign out old InstantDB session first to prevent data leakage
-      if (
-        instantAuth.user &&
-        lastStackUserIdRef.current &&
-        lastStackUserIdRef.current !== currentStackUserId
-      ) {
-        if (isSigningOutRef.current) return;
-
-        isSigningOutRef.current = true;
-        try {
-          console.log(
-            "Account switch detected, signing out old InstantDB session"
-          );
-          await db.auth.signOut();
-        } catch (err) {
-          console.error("InstantDB sign out error during account switch:", err);
-        } finally {
-          isSigningOutRef.current = false;
-        }
+      if (inFlightUserIdRef.current === stackUserId) {
+        return
       }
 
-      // Case 4: Already authenticated with correct user
-      if (
-        instantAuth.user &&
-        instantAuth.user.id === currentStackUserId &&
-        lastStackUserIdRef.current === currentStackUserId
-      ) {
-        if (isMounted) {
-          dispatchAuthState({ isAuthenticating: false, error: null });
-        }
-        return;
-      }
-
-      // Case 5: Stack Auth signed in but InstantDB not authenticated (or wrong user)
-      if (isMounted) {
-        dispatchAuthState({ isAuthenticating: true, error: null });
-      }
+      inFlightUserIdRef.current = stackUserId
 
       try {
-        // Get access token for iframe-safe authentication
-        // In iframe contexts, cookies may be blocked, so we send the token via header
-        // Stack Auth stores the access token in cookies with "cookie" tokenStore
-        const accessToken = getStackAccessToken();
-        
-        const response = await fetch("/api/auth/instantdb", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(accessToken && { "X-Stack-Access-Token": accessToken }),
-          },
-          credentials: "include",
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(
-            `Failed to authenticate: ${response.statusText}${errorText ? ` - ${errorText}` : ""}`
-          );
+        if (instantUserId && instantUserId !== stackUserId) {
+          setState("signing-out")
+          await db.auth.signOut()
         }
 
-        const { token } = await response.json();
+        setState("syncing")
 
-        if (!isMounted) return;
+        let lastError: unknown
 
-        if (!token) {
-          throw new Error("No token received from authentication endpoint");
+        for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
+          if (attempt > 0) {
+            await wait(RETRY_DELAYS_MS[attempt - 1]!, controller.signal)
+          }
+
+          try {
+            const authorization = await stackApp.getAuthorizationHeader()
+            const token = await fetchInstantToken({
+              authorization,
+              signal: controller.signal,
+            })
+
+            await db.auth.signInWithToken(token)
+            setState("synced")
+            return
+          } catch (error) {
+            if (isAbortError(error)) return
+
+            lastError = error
+
+            if (
+              !isTransientAuthSyncError(error) ||
+              attempt === RETRY_DELAYS_MS.length
+            ) {
+              break
+            }
+          }
         }
 
-        await db.auth.signInWithToken(token);
+        const message =
+          lastError instanceof Error
+            ? lastError.message
+            : "InstantDB authentication failed"
 
-        lastStackUserIdRef.current = currentStackUserId;
-
-        if (isMounted) {
-          dispatchAuthState({ isAuthenticating: false, error: null });
-        }
-      } catch (err) {
-        if (!isMounted) return;
-        if (err instanceof DOMException && err.name === "AbortError") return;
-
-        // Suppress transient network errors that are usually temporary
-        // These are often connection issues that resolve on retry
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        const isTransientError =
-          errorMessage.includes("Failed to fetch") ||
-          errorMessage.includes("ERR_CONNECTION") ||
-          errorMessage.includes("NetworkError") ||
-          errorMessage.includes("network");
-
-        if (isTransientError) {
-          // Log to console but don't show to user (will retry on next render)
-          console.warn(
-            "Transient InstantDB auth error (will retry):",
-            errorMessage
-          );
-          dispatchAuthState({ isAuthenticating: false, error: null });
-        } else {
-          // Only set user-facing errors for non-transient issues
-          console.error("InstantDB authentication error:", err);
-          dispatchAuthState({ isAuthenticating: false, error: errorMessage });
+        setState("error", message)
+      } finally {
+        if (inFlightUserIdRef.current === stackUserId) {
+          inFlightUserIdRef.current = null
         }
       }
-    };
+    }
 
-    syncAuth();
+    syncAuth().catch((error: unknown) => {
+      if (isAbortError(error)) return
+
+      const message =
+        error instanceof Error ? error.message : "InstantDB authentication failed"
+
+      setState("error", message)
+    })
 
     return () => {
-      isMounted = false;
-      controller.abort();
-    };
-  }, [stackUser?.id, stackUser, instantAuth.user?.id, instantAuth.user]);
+      isMounted = false
+      controller.abort()
+    }
+  }, [stackApp, stackUserId, instantUserId])
 
-  return authState;
+  return authState
 }
+

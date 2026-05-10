@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { stackServerApp } from "@/stack/server";
 import {
   validatePaymentsEnv,
   checkItemEntitlement,
@@ -30,6 +29,7 @@ export async function GET(request: Request) {
     }
 
     // 2) Auth check
+    const { stackServerApp } = await import("@/stack/server");
     const user = await stackServerApp.getUser({ tokenStore: request });
     if (!user?.id) {
       return NextResponse.json(
@@ -65,4 +65,3 @@ export async function GET(request: Request) {
     );
   }
 }
-
