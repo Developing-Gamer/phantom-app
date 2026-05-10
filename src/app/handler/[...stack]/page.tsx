@@ -1,6 +1,11 @@
 import { StackHandler } from "@stackframe/stack";
 import { stackServerApp } from "@/stack/server";
 
+export const metadata = {
+  title: "Authentication | Phantom App",
+  description: "Stack Auth handler for Phantom App.",
+};
+
 export default function Handler(_props: {
   params: Promise<{ stack?: string[] }>;
   searchParams: Promise<Record<string, string>>;
