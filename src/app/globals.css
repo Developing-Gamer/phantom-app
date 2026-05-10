@@ -123,6 +123,8 @@
   }
   body {
     @apply bg-background text-foreground font-sans;
+    scrollbar-width: thin;
+    scrollbar-color: gray transparent;
   }
 }
 
