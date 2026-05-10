@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { StackProvider, StackTheme } from "@stackframe/stack";
 import { stackClientApp } from "@/stack/client";
+import { AppProviders } from "@/components/app-providers";
 import { AuthSyncProvider } from "@/components/auth-sync-provider";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -34,9 +35,11 @@ export default function RootLayout({
       >
         <StackProvider app={stackClientApp}>
           <StackTheme>
-            <AuthSyncProvider>
-              {children}
-            </AuthSyncProvider>
+            <AppProviders>
+              <AuthSyncProvider>
+                {children}
+              </AuthSyncProvider>
+            </AppProviders>
           </StackTheme>
         </StackProvider>
       </body>
