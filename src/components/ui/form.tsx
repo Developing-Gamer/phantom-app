@@ -1,8 +1,7 @@
 "use client"
 
 import * as React from "react"
-import * as LabelPrimitive from "@radix-ui/react-label"
-import { Slot } from "@radix-ui/react-slot"
+import { use } from "react"
 import {
   Controller,
   FormProvider,
@@ -43,8 +42,8 @@ const FormField = <
 }
 
 const useFormField = () => {
-  const fieldContext = React.useContext(FormFieldContext)
-  const itemContext = React.useContext(FormItemContext)
+  const fieldContext = use(FormFieldContext)
+  const itemContext = use(FormItemContext)
   const { getFieldState } = useFormContext()
   const formState = useFormState({ name: fieldContext.name })
   const fieldState = getFieldState(fieldContext.name, formState)
@@ -90,7 +89,7 @@ function FormItem({ className, ...props }: React.ComponentProps<"div">) {
 function FormLabel({
   className,
   ...props
-}: React.ComponentProps<typeof LabelPrimitive.Root>) {
+}: React.ComponentProps<typeof Label>) {
   const { error, formItemId } = useFormField()
 
   return (
@@ -104,22 +103,34 @@ function FormLabel({
   )
 }
 
-function FormControl({ ...props }: React.ComponentProps<typeof Slot>) {
-  const { error, formItemId, formDescriptionId, formMessageId } = useFormField()
+type FormControlElementProps = React.HTMLAttributes<HTMLElement> & {
+  "aria-describedby"?: string
+  "aria-invalid"?: boolean
+  "data-slot"?: string
+  id?: string
+}
 
-  return (
-    <Slot
-      data-slot="form-control"
-      id={formItemId}
-      aria-describedby={
-        !error
-          ? `${formDescriptionId}`
-          : `${formDescriptionId} ${formMessageId}`
-      }
-      aria-invalid={!!error}
-      {...props}
-    />
-  )
+function FormControl({
+  children,
+  className,
+  ...props
+}: FormControlElementProps & {
+  children: React.ReactElement<FormControlElementProps>
+}) {
+  const { error, formItemId, formDescriptionId, formMessageId } = useFormField()
+  const child = React.Children.only(children)
+
+  return React.cloneElement(child, {
+    ...props,
+    ...child.props,
+    "data-slot": "form-control",
+    id: formItemId,
+    "aria-describedby": !error
+      ? `${formDescriptionId}`
+      : `${formDescriptionId} ${formMessageId}`,
+    "aria-invalid": !!error,
+    className: cn(child.props.className, className),
+  })
 }
 
 function FormDescription({ className, ...props }: React.ComponentProps<"p">) {
