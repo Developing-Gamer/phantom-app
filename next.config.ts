@@ -7,8 +7,14 @@ const nextConfig: NextConfig = {
     ppr: false,
   },
   allowedDevOrigins: [
-    "http://localhost:3000",
-    "http://www.tryphantom.io",
+    "localhost",
+    "*.localhost",
+    "**.preview.localhost",
+    "**.preview.lvh.me",
+    "**.preview.tryphantom.io",
+    "**.modal.host",
+    "tryphantom.io",
+    "www.tryphantom.io",
   ],
   typescript: {
     ignoreBuildErrors: true,
