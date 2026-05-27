@@ -1,5 +1,6 @@
 "use client";
 
+import "@/lib/dev-suppress-known-console-errors";
 import { StackProvider, StackTheme } from "@stackframe/stack";
 import { useSyncExternalStore } from "react";
 import { stackClientApp } from "@/stack/client";
