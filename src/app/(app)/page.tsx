@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
 
 import { HomeContent } from "@/components/home-content"
-import { RootProviders } from "@/components/root-providers"
 
 export const metadata: Metadata = {
   title: "Dashboard | Phantom App",
@@ -9,9 +8,5 @@ export const metadata: Metadata = {
 }
 
 export default function Home() {
-  return (
-    <RootProviders>
-      <HomeContent />
-    </RootProviders>
-  )
+  return <HomeContent />
 }

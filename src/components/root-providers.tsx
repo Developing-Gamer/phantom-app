@@ -1,11 +1,9 @@
 "use client";
 
-import "@/lib/dev-suppress-known-console-errors";
 import { StackProvider, StackTheme } from "@stackframe/stack";
 import { stackClientApp } from "@/stack/client";
 import { AppProviders } from "@/components/app-providers";
 import { AuthSyncProvider } from "@/components/auth-sync-provider";
-import { ThemeToggle } from "@/components/theme-toggle";
 
 export function RootProviders({ children }: { children: React.ReactNode }) {
   return (
@@ -15,7 +13,6 @@ export function RootProviders({ children }: { children: React.ReactNode }) {
           <AuthSyncProvider>
             {children}
           </AuthSyncProvider>
-          <ThemeToggle />
         </AppProviders>
       </StackTheme>
     </StackProvider>
