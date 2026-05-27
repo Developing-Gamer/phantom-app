@@ -21,7 +21,7 @@
     "@iconify/react": "^6.0.2",
     "@instantdb/admin": "^1.0.26",
     "@instantdb/react": "^1.0.26",
-    "@stackframe/stack": "^2.8.88",
+    "@stackframe/stack": "^2.8.108",
     "@tanstack/react-query": "^5.100.9",
     "@tanstack/react-query-devtools": "^5.100.9",
     "@trpc/client": "^11.17.0",
