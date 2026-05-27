@@ -1,4 +1,5 @@
 import { StackHandler } from "@stackframe/stack";
+import { RootProviders } from "@/components/root-providers";
 import { stackServerApp } from "@/stack/server";
 
 export const metadata = {
@@ -11,5 +12,9 @@ export default function Handler(_props: {
   searchParams: Promise<Record<string, string>>;
 }) {
   // Pass server app explicitly for proper cookie handling
-  return <StackHandler app={stackServerApp} fullPage />;
+  return (
+    <RootProviders>
+      <StackHandler app={stackServerApp} fullPage />
+    </RootProviders>
+  );
 }
