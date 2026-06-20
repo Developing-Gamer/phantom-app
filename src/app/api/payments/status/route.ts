@@ -2,13 +2,13 @@ import { NextResponse } from "next/server";
 import {
   validatePaymentsEnv,
   checkItemEntitlement,
-} from "@/lib/stack-payments";
+} from "@/lib/hexclave-payments";
 
 /**
  * GET /api/payments/status?item=<item_id>
  *
  * Checks if the current user has an active entitlement for a given item.
- * Uses Stack Auth item-based verification (not product name matching).
+ * Uses Hexclave item-based verification (not product name matching).
  *
  * Query params:
  *   item: string  — the item key to check (e.g. "pro_access")
@@ -23,14 +23,14 @@ export async function GET(request: Request) {
     const missing = validatePaymentsEnv();
     if (missing.length > 0) {
       return NextResponse.json(
-        { error: "Missing Stack Auth env vars", missing },
+        { error: "Missing Hexclave env vars", missing },
         { status: 500, headers: { "Cache-Control": "no-store" } }
       );
     }
 
     // 2) Auth check
-    const { stackServerApp } = await import("@/stack/server");
-    const user = await stackServerApp.getUser({ tokenStore: request });
+    const { hexclaveServerApp } = await import("@/hexclave/server");
+    const user = await hexclaveServerApp.getUser({ tokenStore: request });
     if (!user?.id) {
       return NextResponse.json(
         { error: "Unauthorized" },

@@ -7,7 +7,11 @@ if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
 
   console.error = (...args: Parameters<typeof console.error>) => {
     const message = args
-      .map((arg) => (typeof arg === "string" ? arg : ""))
+      .map((arg) => {
+        if (typeof arg === "string") return arg;
+        if (arg instanceof Error) return arg.message;
+        return "";
+      })
       .join(" ");
 
     if (

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import "@/lib/dev-suppress-known-console-errors";
 import { RootProviders } from "@/components/root-providers";
 import "./globals.css";
 

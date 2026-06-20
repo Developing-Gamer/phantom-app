@@ -1,103 +1,25 @@
-import { useEffect, useReducer, useRef } from "react"
-import { useStackApp, useUser } from "@stackframe/stack"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { useHexclaveApp, useUser } from "@hexclave/next"
 
 import { db } from "@/lib/db"
 
-export type InstantAuthSyncStatus =
-  | "idle"
-  | "syncing"
-  | "synced"
-  | "signing-out"
-  | "error"
+export type InstantAuthSyncStatus = "idle" | "syncing" | "synced" | "error"
 
 export type InstantAuthSyncState = {
   status: InstantAuthSyncStatus
-  isAuthenticating: boolean
   error: string | null
-  stackUserId: string | null
-  instantUserId: string | null
+  retry: () => void
 }
 
-const RETRY_DELAYS_MS = [250, 750, 1500] as const
-
-function createState(input: {
-  status: InstantAuthSyncStatus
-  error?: string | null
-  stackUserId: string | null
-  instantUserId: string | null
-}): InstantAuthSyncState {
-  return {
-    status: input.status,
-    isAuthenticating:
-      input.status === "syncing" || input.status === "signing-out",
-    error: input.error ?? null,
-    stackUserId: input.stackUserId,
-    instantUserId: input.instantUserId,
-  }
-}
-
-function wait(ms: number, signal: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new DOMException("Aborted", "AbortError"))
-      return
-    }
-
-    const timeout = window.setTimeout(resolve, ms)
-
-    signal.addEventListener(
-      "abort",
-      () => {
-        window.clearTimeout(timeout)
-        reject(new DOMException("Aborted", "AbortError"))
-      },
-      { once: true }
-    )
-  })
-}
-
-function isAbortError(error: unknown) {
-  return error instanceof DOMException && error.name === "AbortError"
-}
-
-function isTransientAuthSyncError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error)
-
-  return (
-    message.includes("Failed to fetch") ||
-    message.includes("ERR_CONNECTION") ||
-    message.includes("NetworkError") ||
-    message.toLowerCase().includes("network") ||
-    message.includes("503") ||
-    message.includes("502") ||
-    message.includes("504")
-  )
-}
-
-async function fetchInstantToken(input: {
-  authorization: string | null
-  signal: AbortSignal
-}) {
+async function fetchInstantToken(authorization: string | null) {
   const response = await fetch("/api/auth/instantdb", {
     method: "POST",
-    headers: {
-      ...(input.authorization ? { Authorization: input.authorization } : {}),
-    },
+    headers: authorization ? { Authorization: authorization } : undefined,
     credentials: "include",
-    signal: input.signal,
   })
 
   if (!response.ok) {
-    let details = ""
-
-    try {
-      const body = (await response.json()) as { error?: string }
-      details = body.error ? `: ${body.error}` : ""
-    } catch {
-      details = ""
-    }
-
-    throw new Error(`InstantDB auth failed ${response.status}${details}`)
+    throw new Error(`InstantDB auth failed (${response.status})`)
   }
 
   const body = (await response.json()) as { token?: unknown }
@@ -110,143 +32,105 @@ async function fetchInstantToken(input: {
 }
 
 /**
- * Keeps InstantDB auth aligned with Stack Auth.
+ * Keeps InstantDB auth aligned with Hexclave.
  *
- * Stack Auth remains the source of truth. InstantDB receives short-lived
- * custom auth tokens only when the current Instant user is missing or does not
- * match the current Stack user.
+ * Hexclave is the source of truth. When the Hexclave user changes, InstantDB is
+ * signed in with a freshly minted token (or signed out when Hexclave has no
+ * user). The effect is keyed on both user ids, so it re-runs whenever either
+ * side changes.
  */
-export function useInstantDBAuth() {
-  const stackApp = useStackApp()
-  const stackUser = useUser()
-  const instantAuth = db.useAuth()
-  const stackUserId = stackUser?.id ?? null
-  const instantUserId = instantAuth.user?.id ?? null
-  const [authState, dispatchAuthState] = useReducer(
-    (_state: InstantAuthSyncState, nextState: InstantAuthSyncState) =>
-      nextState,
-    createState({
-      status: "idle",
-      stackUserId: null,
-      instantUserId: null,
-    })
-  )
-  const inFlightUserIdRef = useRef<string | null>(null)
+export function useInstantDBAuth(): InstantAuthSyncState {
+  const app = useHexclaveApp()
+  const hexclaveUserId = useUser()?.id ?? null
+  const instantUserId = db.useAuth().user?.id ?? null
+  const [status, setStatus] = useState<InstantAuthSyncStatus>("idle")
+  const [error, setError] = useState<string | null>(null)
+  const mountedRef = useRef(false)
+  // Bumping this forces the sync effect to re-run even when the ids are
+  // unchanged (e.g. after a bfcache/back-button restore, or a manual retry).
+  const [resyncToken, setResyncToken] = useState(0)
 
   useEffect(() => {
-    const controller = new AbortController()
-    let isMounted = true
+    mountedRef.current = true
 
-    const setState = (
-      status: InstantAuthSyncStatus,
-      error: string | null = null
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
+  const retry = useCallback(() => {
+    window.setTimeout(() => {
+      if (!mountedRef.current) return
+      setResyncToken((value) => value + 1)
+    }, 0)
+  }, [])
+
+  // Re-attempt the sync whenever the tab is restored from the bfcache or
+  // becomes visible again. Effects do not re-fire on a back-button restore, so
+  // without this an aborted in-flight sync would leave the app stuck.
+  useEffect(() => {
+    const handlePageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) retry()
+    }
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") retry()
+    }
+
+    window.addEventListener("pageshow", handlePageShow)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [retry])
+
+  useEffect(() => {
+    let active = true
+
+    const setSyncResult = (
+      nextStatus: InstantAuthSyncStatus,
+      nextError: string | null,
     ) => {
-      if (!isMounted) return
+      window.setTimeout(() => {
+        if (!active || !mountedRef.current) return
+        setStatus(nextStatus)
+        setError(nextError)
+      }, 0)
+    }
 
-      dispatchAuthState(
-        createState({
-          status,
-          error,
-          stackUserId,
-          instantUserId,
-        })
+    const sync = async () => {
+      if (!hexclaveUserId) {
+        if (instantUserId) await db.auth.signOut()
+        setSyncResult("idle", null)
+        return
+      }
+
+      if (instantUserId === hexclaveUserId) {
+        setSyncResult("synced", null)
+        return
+      }
+
+      setSyncResult("syncing", null)
+
+      const authorization = await app.getAuthorizationHeader()
+      const token = await fetchInstantToken(authorization)
+      await db.auth.signInWithToken(token)
+
+      setSyncResult("synced", null)
+    }
+
+    sync().catch((syncError: unknown) => {
+      setSyncResult(
+        "error",
+        syncError instanceof Error ? syncError.message : String(syncError),
       )
-    }
-
-    const syncAuth = async () => {
-      if (!stackUserId) {
-        inFlightUserIdRef.current = null
-
-        if (!instantUserId) {
-          setState("idle")
-          return
-        }
-
-        setState("signing-out")
-        await db.auth.signOut()
-        setState("idle")
-        return
-      }
-
-      if (instantUserId === stackUserId) {
-        inFlightUserIdRef.current = null
-        setState("synced")
-        return
-      }
-
-      if (inFlightUserIdRef.current === stackUserId) {
-        return
-      }
-
-      inFlightUserIdRef.current = stackUserId
-
-      try {
-        if (instantUserId && instantUserId !== stackUserId) {
-          setState("signing-out")
-          await db.auth.signOut()
-        }
-
-        setState("syncing")
-
-        let lastError: unknown
-
-        for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
-          if (attempt > 0) {
-            await wait(RETRY_DELAYS_MS[attempt - 1]!, controller.signal)
-          }
-
-          try {
-            const authorization = await stackApp.getAuthorizationHeader()
-            const token = await fetchInstantToken({
-              authorization,
-              signal: controller.signal,
-            })
-
-            await db.auth.signInWithToken(token)
-            setState("synced")
-            return
-          } catch (error) {
-            if (isAbortError(error)) return
-
-            lastError = error
-
-            if (
-              !isTransientAuthSyncError(error) ||
-              attempt === RETRY_DELAYS_MS.length
-            ) {
-              break
-            }
-          }
-        }
-
-        const message =
-          lastError instanceof Error
-            ? lastError.message
-            : "InstantDB authentication failed"
-
-        setState("error", message)
-      } finally {
-        if (inFlightUserIdRef.current === stackUserId) {
-          inFlightUserIdRef.current = null
-        }
-      }
-    }
-
-    syncAuth().catch((error: unknown) => {
-      if (isAbortError(error)) return
-
-      const message =
-        error instanceof Error ? error.message : "InstantDB authentication failed"
-
-      setState("error", message)
     })
 
     return () => {
-      isMounted = false
-      controller.abort()
+      active = false
     }
-  }, [stackApp, stackUserId, instantUserId])
+  }, [app, hexclaveUserId, instantUserId, resyncToken])
 
-  return authState
+  return { status, error, retry }
 }
-

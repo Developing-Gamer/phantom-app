@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import {
   validatePaymentsEnv,
-  getStackPaymentsHeaders,
+  getHexclavePaymentsHeaders,
   buildReturnUrl,
-} from "@/lib/stack-payments";
-
-const STACK_API_BASE = "https://api.stack-auth.com/api/v1";
+  HEXCLAVE_API_BASE,
+} from "@/lib/hexclave-payments";
 
 /**
  * POST /api/payments/checkout
  *
- * Creates a Stack Auth checkout URL for the current user.
+ * Creates a Hexclave checkout URL for the current user.
  *
  * Request body:
  *   productInline: object   — inline product definition
@@ -27,14 +26,14 @@ export async function POST(request: Request) {
     const missing = validatePaymentsEnv();
     if (missing.length > 0) {
       return NextResponse.json(
-        { error: "Missing Stack Auth env vars", missing },
+        { error: "Missing Hexclave env vars", missing },
         { status: 500 }
       );
     }
 
     // 2) Auth check
-    const { stackServerApp } = await import("@/stack/server");
-    const user = await stackServerApp.getUser({ tokenStore: request });
+    const { hexclaveServerApp } = await import("@/hexclave/server");
+    const user = await hexclaveServerApp.getUser({ tokenStore: request });
     if (!user?.id) {
       return NextResponse.json(
         { error: "Unauthorized" },
@@ -61,11 +60,11 @@ export async function POST(request: Request) {
       ? buildReturnUrl(body.returnUrl, body.planId ?? "default")
       : undefined;
 
-    // 5) Call Stack Auth create-purchase-url
-    const headers = getStackPaymentsHeaders();
+    // 5) Call Hexclave create-purchase-url
+    const headers = getHexclavePaymentsHeaders();
 
     const res = await fetch(
-      `${STACK_API_BASE}/payments/purchases/create-purchase-url`,
+      `${HEXCLAVE_API_BASE}/payments/purchases/create-purchase-url`,
       {
         method: "POST",
         headers,
@@ -93,7 +92,7 @@ export async function POST(request: Request) {
       resJson = JSON.parse(resText) as Record<string, unknown>;
     } catch {
       return NextResponse.json(
-        { error: "Invalid response from Stack Auth", details: resText },
+        { error: "Invalid response from Hexclave", details: resText },
         { status: 502 }
       );
     }

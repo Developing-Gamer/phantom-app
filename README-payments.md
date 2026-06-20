@@ -1,17 +1,17 @@
-# Stack Auth Payments Starter
+# Hexclave Payments Starter
 
 Pre-built payments helpers for Phantom-generated apps.
 
 ## Files
 
-- `src/lib/stack-payments.ts` — Core helpers: env validation, header builder, checkout URL creation, item entitlement check
-- `src/app/api/payments/checkout/route.ts` — POST endpoint to create Stack Auth checkout URLs
+- `src/lib/hexclave-payments.ts` — Core helpers: env validation, header builder, checkout URL creation, item entitlement check
+- `src/app/api/payments/checkout/route.ts` — POST endpoint to create Hexclave checkout URLs
 - `src/app/api/payments/status/route.ts` — GET endpoint to verify item-based entitlements
 
 ## How It Works
 
 1. Agent creates a pricing UI and calls `/api/payments/checkout` with an inline product definition
-2. User completes checkout on Stack Auth checkout page
+2. User completes checkout on Hexclave checkout page
 3. User is redirected back with `?checkout=success&plan=<id>`
 4. Page calls `/api/payments/status?item=<plan_id>_access` to verify entitlement
 5. UI shows success state when `hasAccess: true`
@@ -20,9 +20,9 @@ Pre-built payments helpers for Phantom-generated apps.
 
 Set by Phantom during provisioning (no manual setup needed):
 
-- `NEXT_PUBLIC_STACK_PROJECT_ID`
-- `NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY`
-- `STACK_SECRET_SERVER_KEY`
+- `NEXT_PUBLIC_HEXCLAVE_PROJECT_ID`
+- `NEXT_PUBLIC_HEXCLAVE_PUBLISHABLE_CLIENT_KEY`
+- `HEXCLAVE_SECRET_SERVER_KEY`
 
 ## Inline Product Shape
 

@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "parser": "node scripts/parse.mjs",
     "clean": "rm -rf .next node_modules",
+    "hexclave:push": "node scripts/hexclave-config.mjs push",
+    "hexclave:pull": "node scripts/hexclave-config.mjs pull",
     "db:push": "instant-cli push",
     "db:pull": "instant-cli pull",
     "perms:push": "instant-cli push perms",
@@ -17,11 +19,11 @@
   "dependencies": {
     "@base-ui/react": "^1.4.1",
     "@gsap/react": "^2.1.2",
+    "@hexclave/next": "^1.0.22",
     "@hookform/resolvers": "^5.2.2",
     "@iconify/react": "^6.0.2",
     "@instantdb/admin": "^1.0.26",
     "@instantdb/react": "^1.0.26",
-    "@stackframe/stack": "^2.8.108",
     "@tanstack/react-query": "^5.100.9",
     "@tanstack/react-query-devtools": "^5.100.9",
     "@trpc/client": "^11.17.0",
@@ -58,6 +60,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@hexclave/cli": "^1.0.22",
     "@tailwindcss/postcss": "^4.3.0",
     "@types/node": "^22.19.18",
     "@types/react": "^19.2.14",

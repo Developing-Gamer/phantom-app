@@ -5,7 +5,7 @@ import { i } from "@instantdb/react";
 const schema = i.schema({
   entities: {
     // InstantDB's built-in user entity - required for custom authentication
-    // When using Stack Auth with InstantDB, user emails/IDs are stored here
+    // When using Hexclave with InstantDB, user emails/IDs are stored here
     $users: i.entity({
       email: i.any().unique().indexed(),
     }),

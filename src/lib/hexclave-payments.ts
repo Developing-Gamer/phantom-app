@@ -1,25 +1,25 @@
 /**
- * Stack Auth Payments helpers for generated Phantom apps.
+ * Hexclave Payments helpers for generated Phantom apps.
  *
  * Provides:
  * - Env validation (prevents empty-header ACCESS_TYPE_REQUIRED errors)
- * - Canonical Stack Auth server header builder
+ * - Canonical Hexclave server header builder
  * - Checkout URL creation with correct inline product shape
  * - Item-based entitlement verification
  */
 
-const STACK_API_BASE = "https://api.stack-auth.com/api/v1";
+export const HEXCLAVE_API_BASE = "https://api.hexclave.com/api/v1";
 
 const REQUIRED_ENV_KEYS = [
-  "NEXT_PUBLIC_STACK_PROJECT_ID",
-  "NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY",
-  "STACK_SECRET_SERVER_KEY",
+  "NEXT_PUBLIC_HEXCLAVE_PROJECT_ID",
+  "NEXT_PUBLIC_HEXCLAVE_PUBLISHABLE_CLIENT_KEY",
+  "HEXCLAVE_SECRET_SERVER_KEY",
 ] as const;
 
 export type PaymentsEnvKey = (typeof REQUIRED_ENV_KEYS)[number];
 
 /**
- * Validate that all required Stack Auth env vars are present and non-empty.
+ * Validate that all required Hexclave env vars are present and non-empty.
  * Returns the list of missing keys (empty array = all good).
  */
 export function validatePaymentsEnv(): PaymentsEnvKey[] {
@@ -29,24 +29,24 @@ export function validatePaymentsEnv(): PaymentsEnvKey[] {
 }
 
 /**
- * Build the required server-auth headers for Stack Auth payments API calls.
+ * Build the required server-auth headers for Hexclave payments API calls.
  * Throws if any required env var is missing.
  */
-export function getStackPaymentsHeaders(): Record<string, string> {
+export function getHexclavePaymentsHeaders(): Record<string, string> {
   const missing = validatePaymentsEnv();
   if (missing.length > 0) {
     throw new Error(
-      `Missing Stack Auth env vars: ${missing.join(", ")}. Cannot build payments headers.`
+      `Missing Hexclave env vars: ${missing.join(", ")}. Cannot build payments headers.`
     );
   }
 
   return {
     "content-type": "application/json",
     "x-stack-access-type": "server",
-    "x-stack-project-id": process.env.NEXT_PUBLIC_STACK_PROJECT_ID!,
-    "x-stack-secret-server-key": process.env.STACK_SECRET_SERVER_KEY!,
+    "x-stack-project-id": process.env.NEXT_PUBLIC_HEXCLAVE_PROJECT_ID!,
+    "x-stack-secret-server-key": process.env.HEXCLAVE_SECRET_SERVER_KEY!,
     "x-stack-publishable-client-key":
-      process.env.NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY!,
+      process.env.NEXT_PUBLIC_HEXCLAVE_PUBLISHABLE_CLIENT_KEY!,
   };
 }
 
@@ -89,7 +89,7 @@ export function buildInlineProduct(
 }
 
 /**
- * Create a Stack Auth checkout URL for a user.
+ * Create a Hexclave checkout URL for a user.
  * Returns { url } on success or { error, details } on failure.
  */
 export async function createCheckoutUrl(input: {
@@ -97,10 +97,10 @@ export async function createCheckoutUrl(input: {
   productInline: Record<string, unknown>;
   returnUrl?: string;
 }): Promise<{ url: string } | { error: string; details?: unknown }> {
-  const headers = getStackPaymentsHeaders();
+  const headers = getHexclavePaymentsHeaders();
 
   const res = await fetch(
-    `${STACK_API_BASE}/payments/purchases/create-purchase-url`,
+    `${HEXCLAVE_API_BASE}/payments/purchases/create-purchase-url`,
     {
       method: "POST",
       headers,
@@ -118,7 +118,7 @@ export async function createCheckoutUrl(input: {
 
   if (!res.ok) {
     return {
-      error: `Stack Auth checkout failed (${res.status})`,
+      error: `Hexclave checkout failed (${res.status})`,
       details: text,
     };
   }
@@ -140,10 +140,10 @@ export async function checkItemEntitlement(
   userId: string,
   itemId: string
 ): Promise<boolean> {
-  const headers = getStackPaymentsHeaders();
+  const headers = getHexclavePaymentsHeaders();
 
   const res = await fetch(
-    `${STACK_API_BASE}/payments/items/user/${encodeURIComponent(userId)}/${encodeURIComponent(itemId)}`,
+    `${HEXCLAVE_API_BASE}/payments/items/user/${encodeURIComponent(userId)}/${encodeURIComponent(itemId)}`,
     {
       method: "GET",
       headers,
@@ -164,10 +164,7 @@ export async function checkItemEntitlement(
 /**
  * Build a return URL with checkout success query params.
  */
-export function buildReturnUrl(
-  baseUrl: string,
-  planId: string
-): string {
+export function buildReturnUrl(baseUrl: string, planId: string): string {
   try {
     const url = new URL(baseUrl);
     url.searchParams.set("checkout", "success");
@@ -177,4 +174,3 @@ export function buildReturnUrl(
     return baseUrl;
   }
 }
-
