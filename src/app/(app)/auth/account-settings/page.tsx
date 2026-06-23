@@ -250,11 +250,19 @@ function AccountSettingsContent() {
       displayName: user?.displayName || "",
       profileImageUrl: user?.profileImageUrl || "",
     };
+    let cancelled = false;
 
     savedProfileRef.current = nextProfile;
-    setDisplayName(nextProfile.displayName);
-    setProfileImageUrl(nextProfile.profileImageUrl);
-  }, [user?.id]);
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setDisplayName(nextProfile.displayName);
+      setProfileImageUrl(nextProfile.profileImageUrl);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.displayName, user?.id, user?.profileImageUrl]);
 
   useEffect(() => {
     const currentUser = profileUpdateUserRef.current;
