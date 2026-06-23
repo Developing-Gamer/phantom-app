@@ -22,6 +22,7 @@ const config = defineHexclaveConfig({
       allowSignIn: true,
     },
     otp: {
+      // Enables email magic-link / one-time-code sign-in by default.
       allowSignIn: true,
     },
     passkey: {
@@ -34,6 +35,11 @@ const config = defineHexclaveConfig({
           type: "google",
           allowSignIn: true,
           allowConnectedAccounts: true,
+        },
+        github: {
+          type: "github",
+          allowSignIn: false,
+          allowConnectedAccounts: false,
         },
       },
     },

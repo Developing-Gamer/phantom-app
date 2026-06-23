@@ -46,9 +46,11 @@ function SignInContent() {
 
   // Config checks
   const credentialEnabled = project.config.credentialEnabled;
-  const magicLinkEnabled = project.config.magicLinkEnabled;
+  const magicLinkEnabled = project.config.magicLinkEnabled ?? true;
   const passkeyEnabled = project.config.passkeyEnabled;
-  const oauthProviders = project.config.oauthProviders || [];
+  const oauthProviders = (project.config.oauthProviders || []).filter(
+    (provider) => provider.id.toLowerCase() !== "github"
+  );
 
   // Handle Credential Sign In
   const handleCredentialSignIn = async (e: React.FormEvent) => {

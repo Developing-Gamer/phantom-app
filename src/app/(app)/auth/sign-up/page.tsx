@@ -65,8 +65,10 @@ function SignUpContent() {
   // Config checks
   const signUpEnabled = project.config.signUpEnabled;
   const credentialEnabled = project.config.credentialEnabled;
-  const magicLinkEnabled = project.config.magicLinkEnabled;
-  const oauthProviders = project.config.oauthProviders || [];
+  const magicLinkEnabled = project.config.magicLinkEnabled ?? true;
+  const oauthProviders = (project.config.oauthProviders || []).filter(
+    (provider) => provider.id.toLowerCase() !== "github"
+  );
 
   // Handle Credential Sign Up
   const handleCredentialSignUp = async (e: React.FormEvent) => {
