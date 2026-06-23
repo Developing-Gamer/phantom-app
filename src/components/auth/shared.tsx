@@ -193,6 +193,8 @@ export function OAuthButtons({ providers, onSelect, disabled }: OAuthButtonsProp
 
   if (!providers || providers.length === 0) return null;
 
+  const shouldFirstProviderSpanFullWidth = providers.length % 2 === 1;
+
   const getProviderIcon = (provider: string) => {
     switch (provider.toLowerCase()) {
       case "google":
@@ -213,7 +215,7 @@ export function OAuthButtons({ providers, onSelect, disabled }: OAuthButtonsProp
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {providers.map((p) => (
+        {providers.map((p, index) => (
           <Button
             key={p.id}
             type="button"
@@ -223,7 +225,10 @@ export function OAuthButtons({ providers, onSelect, disabled }: OAuthButtonsProp
               if (oauthDisabled) return;
               onSelect(p.id);
             }}
-            className="flex items-center justify-center gap-2 border-black/8 bg-white text-foreground shadow-sm transition-colors hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+            className={cn(
+              "flex items-center justify-center gap-2 border-black/8 bg-white text-foreground shadow-sm transition-colors hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-950 dark:hover:bg-zinc-900",
+              shouldFirstProviderSpanFullWidth && index === 0 && "sm:col-span-2"
+            )}
           >
             <Icon icon={getProviderIcon(p.id)} className="size-4" />
             <span className="text-sm font-medium">
