@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Eye, EyeOff, CheckCircle2, AlertCircle, Info, Loader2 } from "lucide-react";
 import { Icon } from "@iconify/react";
+import { useIsInIframe } from "@/hooks/use-is-in-iframe";
 
 export function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) {
@@ -187,6 +188,9 @@ interface OAuthButtonsProps {
 }
 
 export function OAuthButtons({ providers, onSelect, disabled }: OAuthButtonsProps) {
+  const isInIframe = useIsInIframe();
+  const oauthDisabled = disabled || isInIframe;
+
   if (!providers || providers.length === 0) return null;
 
   const getProviderIcon = (provider: string) => {
@@ -214,8 +218,11 @@ export function OAuthButtons({ providers, onSelect, disabled }: OAuthButtonsProp
             key={p.id}
             type="button"
             variant="outline"
-            disabled={disabled}
-            onClick={() => onSelect(p.id)}
+            disabled={oauthDisabled}
+            onClick={() => {
+              if (oauthDisabled) return;
+              onSelect(p.id);
+            }}
             className="flex items-center justify-center gap-2 border-black/8 bg-white text-foreground shadow-sm transition-colors hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-950 dark:hover:bg-zinc-900"
           >
             <Icon icon={getProviderIcon(p.id)} className="size-4" />
@@ -225,6 +232,11 @@ export function OAuthButtons({ providers, onSelect, disabled }: OAuthButtonsProp
           </Button>
         ))}
       </div>
+      {isInIframe ? (
+        <p className="text-center text-xs text-muted-foreground">
+          OAuth sign-in is unavailable in embedded preview.
+        </p>
+      ) : null}
     </div>
   );
 }

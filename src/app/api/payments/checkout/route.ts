@@ -12,7 +12,8 @@ import {
  * Creates a Hexclave checkout URL for the current user.
  *
  * Request body:
- *   productInline: object   — inline product definition
+ *   productId?: string      — configured Hexclave product id from hexclave.config.ts
+ *   productInline?: object  — fallback inline product definition
  *   returnUrl?: string      — page to redirect back to after checkout
  *   planId?: string         — plan identifier for return URL params
  *
@@ -43,21 +44,29 @@ export async function POST(request: Request) {
 
     // 3) Parse request body
     const body = (await request.json().catch(() => null)) as {
+      productId?: string;
       productInline?: Record<string, unknown>;
       returnUrl?: string;
       planId?: string;
     } | null;
 
-    if (!body?.productInline) {
+    const productId = body?.productId?.trim();
+    const productBody = productId
+      ? { product_id: productId }
+      : body?.productInline
+        ? { product_inline: body.productInline }
+        : null;
+
+    if (!productBody) {
       return NextResponse.json(
-        { error: "productInline is required in request body" },
+        { error: "productId or productInline is required in request body" },
         { status: 400 }
       );
     }
 
     // 4) Build return URL with checkout params
-    const returnUrl = body.returnUrl
-      ? buildReturnUrl(body.returnUrl, body.planId ?? "default")
+    const returnUrl = body?.returnUrl
+      ? buildReturnUrl(body.returnUrl, body.planId ?? productId ?? "default")
       : undefined;
 
     // 5) Call Hexclave create-purchase-url
@@ -72,7 +81,7 @@ export async function POST(request: Request) {
         body: JSON.stringify({
           customer_type: "user",
           customer_id: user.id,
-          product_inline: body.productInline,
+          ...productBody,
           return_url: returnUrl,
         }),
       }

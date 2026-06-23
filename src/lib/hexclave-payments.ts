@@ -4,7 +4,7 @@
  * Provides:
  * - Env validation (prevents empty-header ACCESS_TYPE_REQUIRED errors)
  * - Canonical Hexclave server header builder
- * - Checkout URL creation with correct inline product shape
+ * - Checkout URL creation with configured products preferred
  * - Item-based entitlement verification
  */
 
@@ -52,6 +52,8 @@ export function getHexclavePaymentsHeaders(): Record<string, string> {
 
 /**
  * Build a canonical product_inline object for create-purchase-url.
+ * Prefer defining products in hexclave.config.ts and passing productId to
+ * createCheckoutUrl. Use inline products only for temporary experiments.
  *
  * @param displayName  - Human-readable plan name (e.g. "Pro", "Pirate Black")
  * @param priceUsd     - Price in USD as string (e.g. "5", "19.99")
@@ -94,10 +96,23 @@ export function buildInlineProduct(
  */
 export async function createCheckoutUrl(input: {
   userId: string;
-  productInline: Record<string, unknown>;
+  productId?: string;
+  productInline?: Record<string, unknown>;
   returnUrl?: string;
 }): Promise<{ url: string } | { error: string; details?: unknown }> {
   const headers = getHexclavePaymentsHeaders();
+  const productBody = input.productId
+    ? { product_id: input.productId }
+    : input.productInline
+      ? { product_inline: input.productInline }
+      : null;
+
+  if (!productBody) {
+    return {
+      error: "Missing checkout product",
+      details: "Pass productId for a configured Hexclave product or productInline as a fallback.",
+    };
+  }
 
   const res = await fetch(
     `${HEXCLAVE_API_BASE}/payments/purchases/create-purchase-url`,
@@ -108,7 +123,7 @@ export async function createCheckoutUrl(input: {
       body: JSON.stringify({
         customer_type: "user",
         customer_id: input.userId,
-        product_inline: input.productInline,
+        ...productBody,
         return_url: input.returnUrl,
       }),
     }

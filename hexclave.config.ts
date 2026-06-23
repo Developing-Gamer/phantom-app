@@ -42,6 +42,18 @@ const config = defineHexclaveConfig({
   onboarding: {
     requireEmailVerification: true,
   },
+  domains: {
+    trustedDomains: {
+      "app.stack-auth.com": {
+        baseUrl: "https://app.stack-auth.com",
+        handlerPath: "/handler",
+      },
+      "app.hexclave.com": {
+        baseUrl: "https://app.hexclave.com",
+        handlerPath: "/handler",
+      },
+    },
+  },
   teams: {
     createPersonalTeamOnSignUp: false,
     allowClientTeamCreation: true,
