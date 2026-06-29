@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 
+import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+
+if (existsSync(".env")) {
+  process.loadEnvFile(".env");
+}
 
 const command = process.argv[2] ?? "push";
 
@@ -10,7 +15,11 @@ if (!["push", "pull"].includes(command)) {
 }
 
 const configFile = process.env.HEXCLAVE_CONFIG_FILE ?? "./hexclave.config.ts";
-const projectId = process.env.HEXCLAVE_PROJECT_ID ?? process.env.STACK_PROJECT_ID;
+const projectId =
+  process.env.HEXCLAVE_PROJECT_ID ??
+  process.env.STACK_PROJECT_ID ??
+  process.env.NEXT_PUBLIC_HEXCLAVE_PROJECT_ID ??
+  process.env.NEXT_PUBLIC_STACK_PROJECT_ID;
 
 const args = ["config", command, "--config-file", configFile];
 
