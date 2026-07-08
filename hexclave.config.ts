@@ -22,10 +22,6 @@ const config = defineHexclaveConfig({
       allowSignIn: true,
     },
     otp: {
-      // Enables email magic-link / one-time-code sign-in by default.
-      allowSignIn: true,
-    },
-    passkey: {
       allowSignIn: true,
     },
     oauth: {

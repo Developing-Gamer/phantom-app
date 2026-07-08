@@ -10,6 +10,12 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Eye, EyeOff, CheckCircle2, AlertCircle, Info, Loader2 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { useIsInIframe } from "@/hooks/use-is-in-iframe";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export function getErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) {
@@ -212,37 +218,68 @@ export function OAuthButtons({ providers, onSelect, disabled }: OAuthButtonsProp
     }
   };
 
+  const getProviderLabel = (provider: { id: string; displayName?: string }) => {
+    const providerName =
+      provider.displayName ?? provider.id.charAt(0).toUpperCase() + provider.id.slice(1);
+
+    return `Continue with ${providerName}`;
+  };
+
+  const renderButton = (p: { id: string; displayName?: string }, index: number) => (
+    <Button
+      key={p.id}
+      type="button"
+      variant="outline"
+      // In an iframe we use aria-disabled instead of disabled so the button
+      // still receives hover/focus events and can anchor the tooltip.
+      disabled={disabled && !isInIframe}
+      aria-disabled={oauthDisabled || undefined}
+      onClick={() => {
+        if (oauthDisabled) return;
+        onSelect(p.id);
+      }}
+      className={cn(
+        "flex items-center justify-center gap-2 border-black/15 bg-white text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.06),0_2px_6px_rgba(0,0,0,0.05)] transition-colors hover:border-black/25 hover:bg-zinc-50 dark:border-white/20 dark:bg-zinc-900 dark:shadow-[0_1px_2px_rgba(0,0,0,0.4)] dark:hover:border-white/30 dark:hover:bg-zinc-800",
+        shouldFirstProviderSpanFullWidth && index === 0 && "sm:col-span-2",
+        isInIframe &&
+          "cursor-not-allowed border-dashed border-black/10 bg-zinc-50/80 text-muted-foreground shadow-none select-none hover:bg-zinc-50/80 active:not-aria-[haspopup]:translate-y-0 dark:border-white/12 dark:bg-zinc-900/40 dark:hover:bg-zinc-900/40"
+      )}
+    >
+      <Icon
+        icon={getProviderIcon(p.id)}
+        className={cn("size-4", isInIframe && "opacity-45 grayscale")}
+      />
+      <span className={cn("text-sm font-medium", isInIframe && "opacity-70")}>
+        {getProviderLabel(p)}
+      </span>
+    </Button>
+  );
+
+  if (!isInIframe) {
+    return (
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {providers.map((p, index) => renderButton(p, index))}
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-3">
+    <TooltipProvider>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {providers.map((p, index) => (
-          <Button
-            key={p.id}
-            type="button"
-            variant="outline"
-            disabled={oauthDisabled}
-            onClick={() => {
-              if (oauthDisabled) return;
-              onSelect(p.id);
-            }}
-            className={cn(
-              "flex items-center justify-center gap-2 border-black/8 bg-white text-foreground shadow-sm transition-colors hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-950 dark:hover:bg-zinc-900",
-              shouldFirstProviderSpanFullWidth && index === 0 && "sm:col-span-2"
-            )}
-          >
-            <Icon icon={getProviderIcon(p.id)} className="size-4" />
-            <span className="text-sm font-medium">
-              {p.displayName ?? p.id.charAt(0).toUpperCase() + p.id.slice(1)}
-            </span>
-          </Button>
+          <Tooltip key={p.id}>
+            <TooltipTrigger render={renderButton(p, index)} />
+            <TooltipContent className="max-w-56 text-center">
+              <span className="inline-flex items-start gap-1.5">
+                <Info className="mt-0.5 size-3.5 shrink-0" />
+                OAuth sign-in is unavailable in the embedded preview. Open the
+                app in a new tab to use {getProviderLabel(p).replace("Continue with ", "")}.
+              </span>
+            </TooltipContent>
+          </Tooltip>
         ))}
       </div>
-      {isInIframe ? (
-        <p className="text-center text-xs text-muted-foreground">
-          OAuth sign-in is unavailable in embedded preview.
-        </p>
-      ) : null}
-    </div>
+    </TooltipProvider>
   );
 }
 
