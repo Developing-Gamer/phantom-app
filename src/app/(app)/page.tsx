@@ -3,8 +3,8 @@ import type { Metadata } from "next"
 import { HomeContent } from "@/components/home-content"
 
 export const metadata: Metadata = {
-  title: "Studio",
-  description: "A simple website to introduce your work.",
+  title: "Hello World",
+  description: "A simple website template.",
 }
 
 export default function Home() {

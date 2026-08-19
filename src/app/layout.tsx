@@ -15,8 +15,8 @@ const newsreader = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "Studio",
-  description: "A simple website to introduce your work.",
+  title: "Hello World",
+  description: "A simple website template.",
 };
 
 export default function RootLayout({
