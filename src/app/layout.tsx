@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Phantom App",
-  description: "App built on Phantom",
+  title: "Hello World",
+  description: "A simple website template.",
 };
 
 export default function RootLayout({
@@ -20,11 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-      </head>
-      <body
-        className={`${inter.className} ${inter.variable} antialiased`}
-      >
+      <body className={`${inter.className} ${inter.variable} antialiased`}>
         <RootProviders>{children}</RootProviders>
       </body>
     </html>
