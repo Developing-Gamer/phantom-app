@@ -20,7 +20,26 @@ Do NOT run `pnpm dev` directly. The app instantiates `HexclaveClientApp`/`Hexcla
 pnpm exec hexclave dev --config-file ./hexclave.config.ts -- next dev --turbopack
 ```
 
-The app serves on `http://localhost:3000`. In production/Phantom provisioning the Hexclave/InstantDB env vars (`NEXT_PUBLIC_HEXCLAVE_PROJECT_ID`, `NEXT_PUBLIC_HEXCLAVE_PUBLISHABLE_CLIENT_KEY`, `HEXCLAVE_SECRET_SERVER_KEY`, `NEXT_PUBLIC_INSTANT_APP_ID`) are set externally; locally the `hexclave dev` dashboard supplies them, so no manual `.env` is needed.
+The app serves on `http://localhost:3000`. The `hexclave dev` dashboard injects the Hexclave/Stack keys (`NEXT_PUBLIC_HEXCLAVE_PROJECT_ID`, `NEXT_PUBLIC_HEXCLAVE_PUBLISHABLE_CLIENT_KEY`, `HEXCLAVE_SECRET_SERVER_KEY`, and the `STACK_*`/`VITE_*`/`EXPO_*` aliases) automatically by spinning up an anonymous cloud dev project against `https://api.hexclave.com`.
+
+### InstantDB env vars are NOT injected by `hexclave dev`
+
+InstantDB is a separate service, so `hexclave dev` does **not** provide `NEXT_PUBLIC_INSTANT_APP_ID` / `INSTANT_ADMIN_TOKEN`. Without `NEXT_PUBLIC_INSTANT_APP_ID`, `src/lib/db.ts` calls `init()` with an empty app id and the **client** crashes on render with `"Instant must be initialized with an appId"` (the server may still return 200, but the browser shows the error boundary). In Phantom provisioning these are injected as secrets. For local dev without those secrets, put them in a gitignored `.env.local` (Next.js loads it automatically):
+
+```
+NEXT_PUBLIC_INSTANT_APP_ID=<app id>
+INSTANT_ADMIN_TOKEN=<admin token>
+```
+
+If you have no InstantDB project, you can mint a throwaway one (expires ~2 weeks) with InstantDB's public endpoint — the response `app.id` and `app["admin-token"]` map to the two vars above:
+
+```
+curl -s -X POST https://api.instantdb.com/dash/apps/ephemeral -H 'content-type: application/json' -d '{"title":"phantom-app-dev"}'
+```
+
+### Dev auth data is ephemeral
+
+The `hexclave dev` anonymous project resets when the local dashboard shuts down (it stops once no CLI sessions remain). Also, `hexclave.config.ts` sets `requireEmailVerification: true`, so newly signed-up users start `is_restricted: email_not_verified` and won't show up in the server `/api/v1/users` list until verified — sign-up itself still succeeds (the API returns 201 and the client is redirected to the authenticated home).
 
 ### Known gotcha: broken bundled `@swc/helpers` in the Hexclave dashboard
 
