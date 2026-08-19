@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Newsreader } from "next/font/google";
 import { RootProviders } from "@/components/root-providers";
 import "./globals.css";
 
@@ -8,9 +8,15 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "Phantom App",
-  description: "App built on Phantom",
+  title: "Studio",
+  description: "A simple website to introduce your work.",
 };
 
 export default function RootLayout({
@@ -23,7 +29,7 @@ export default function RootLayout({
       <head>
       </head>
       <body
-        className={`${inter.className} ${inter.variable} antialiased`}
+        className={`${inter.className} ${inter.variable} ${newsreader.variable} antialiased`}
       >
         <RootProviders>{children}</RootProviders>
       </body>

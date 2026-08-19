@@ -3,8 +3,8 @@ import type { Metadata } from "next"
 import { HomeContent } from "@/components/home-content"
 
 export const metadata: Metadata = {
-  title: "Dashboard | Phantom App",
-  description: "Authenticated Phantom app dashboard with Hexclave and InstantDB.",
+  title: "Studio",
+  description: "A simple website to introduce your work.",
 }
 
 export default function Home() {
