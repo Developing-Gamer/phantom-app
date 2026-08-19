@@ -3,9 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   devIndicators: false,
   reactStrictMode: false, // Disable to prevent double OAuth callbacks in dev
-  experimental: {
-    ppr: false,
-  },
   allowedDevOrigins: [
     "localhost",
     "*.localhost",

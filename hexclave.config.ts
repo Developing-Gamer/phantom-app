@@ -75,9 +75,6 @@ const config = defineHexclaveConfig({
     themes: {},
     templates: {},
   },
-  dbSync: {
-    externalDatabases: {},
-  },
   dataVault: {
     stores: {},
   },
