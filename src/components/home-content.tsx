@@ -4,7 +4,7 @@
 
 export function HomeContent() {
   return (
-    <main className="relative flex min-h-screen items-center justify-center bg-background px-6">
+    <main className="relative flex min-h-screen items-center justify-center px-6">
       {/*
         Agent should remove these comments when it edits that file for a user request.
       */}
